@@ -9,6 +9,7 @@ export const translations = {
     'zh-CN': {
         // 顶部控制栏
         'visual': '视觉',
+        'transparency': '透明',
         'collision': '碰撞',
         'com': '质心',
         'inertia': '惯量',
@@ -16,10 +17,19 @@ export const translations = {
         'jointAxes': '关节轴',
         'shadow': '阴影',
         'lighting': '光照',
+        'upSelect': '上方向',
+        'viewSelect': '视图',
+        'viewFront': '前',
+        'viewBack': '后',
+        'viewLeft': '左',
+        'viewRight': '右',
+        'viewTop': '顶',
+        'viewBottom': '底',
+        'viewIso': '等轴测',
         'files': '文件',
         'joints': '关节',
         'structure': '结构',
-        'edit': '编辑',
+        'editor': '编辑器',
         'measure': '测量',
         'help': '帮助',
         'theme': '主题',
@@ -160,6 +170,7 @@ export const translations = {
     'en-US': {
         // Top control bar
         'visual': 'Visual',
+        'transparency': 'Transparency',
         'collision': 'Collision',
         'com': 'COM',
         'inertia': 'Inertia',
@@ -167,10 +178,19 @@ export const translations = {
         'jointAxes': 'Joint Axes',
         'shadow': 'Shadow',
         'lighting': 'Lighting',
+        'upSelect': 'Up',
+        'viewSelect': 'View',
+        'viewFront': 'Front',
+        'viewBack': 'Back',
+        'viewLeft': 'Left',
+        'viewRight': 'Right',
+        'viewTop': 'Top',
+        'viewBottom': 'Bottom',
+        'viewIso': 'Isometric',
         'files': 'Files',
         'joints': 'Joints',
         'structure': 'Structure',
-        'edit': 'Edit',
+        'editor': 'Editor',
         'measure': 'Measure',
         'help': 'Help',
         'theme': 'Theme',
@@ -376,6 +396,15 @@ class I18n {
                 } else {
                     element.textContent = text;
                 }
+            }
+        });
+
+        document.querySelectorAll('[data-i18n-title]').forEach((element) => {
+            const key = element.getAttribute('data-i18n-title');
+            const text = this.t(key);
+            element.title = text;
+            if (element.tagName === 'BUTTON') {
+                element.setAttribute('aria-label', text);
             }
         });
 

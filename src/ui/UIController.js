@@ -14,6 +14,7 @@ export class UIController {
      */
     setupControlPanel() {
         const showVisualBtn = document.getElementById('show-visual');
+        const transparencyBtn = document.getElementById('toggle-transparency-btn');
         const showCollisionBtn = document.getElementById('show-collision');
         const showComBtn = document.getElementById('show-com');
         const showInertiaBtn = document.getElementById('show-inertia');
@@ -73,6 +74,15 @@ export class UIController {
                     this.sceneManager.render();
                 });
             });
+        }
+
+        if (transparencyBtn) {
+            transparencyBtn.addEventListener('click', () => {
+                toggleButton(transparencyBtn, (newState) => {
+                    this.sceneManager.setTransparencyEnabled(newState);
+                });
+            });
+            this.sceneManager.syncTransparencyButton();
         }
 
         if (showCollisionBtn) {
@@ -136,11 +146,24 @@ export class UIController {
             });
         }
 
+        const viewSelect = document.getElementById('view-select');
+        if (viewSelect) {
+            viewSelect.addEventListener('change', (e) => {
+                const view = e.target.value;
+                if (view) {
+                    this.sceneManager.setView(view);
+                }
+            });
+        }
+
         // Coordinate system direction toggle
         const upSelect = document.getElementById('up-select');
         if (upSelect) {
             upSelect.addEventListener('change', (e) => {
-                this.sceneManager.setUp(e.target.value);
+                const up = e.target.value;
+                if (up) {
+                    this.sceneManager.setUp(up);
+                }
             });
         }
 

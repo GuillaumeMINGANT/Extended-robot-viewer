@@ -16,11 +16,35 @@ export class VisualizationManager {
         this.showCollision = false;
         this.showShadow = true;
         this.showEnhancedLighting = true;  // Default: enhanced lighting enabled
+        this.transparencyEnabled = false;
     }
 
     /**
      * Extract visual and collision meshes from model
      */
+    static isCoordinateAxesObject(obj) {
+        let node = obj;
+        while (node) {
+            if (node.userData?.isCoordinateAxes || node.userData?.isJointAxis) return true;
+            if (node.name && (node.name.endsWith('_axes') || node.name.startsWith('jointAxis_'))) {
+                return true;
+            }
+            node = node.parent;
+        }
+        return false;
+    }
+
+    static isInertialHelperObject(obj) {
+        let node = obj;
+        while (node) {
+            if (node.userData?.isCenterOfMass || node.userData?.isCOMMarker) return true;
+            if (node.userData?.isInertiaBox) return true;
+            if (node.userData?.type === 'com') return true;
+            node = node.parent;
+        }
+        return false;
+    }
+
     extractVisualAndCollision(model) {
         // Clear arrays only on first call to avoid duplicates on subsequent async calls
         const isFirstCall = this.visualMeshes.length === 0;
@@ -39,6 +63,11 @@ export class VisualizationManager {
         // This ensures materials have original properties saved AND enhanced lighting applied
         model.threeObject.traverse((child) => {
             if (child.isMesh && child.material) {
+                if (VisualizationManager.isCoordinateAxesObject(child) ||
+                    VisualizationManager.isInertialHelperObject(child)) {
+                    return;
+                }
+
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 const processedMaterials = [];
 
@@ -182,8 +211,9 @@ export class VisualizationManager {
                     checkNode = checkNode.parent;
                 }
 
-                // Only add non-collider meshes
-                if (!isInCollider) {
+                if (!isInCollider &&
+                    !VisualizationManager.isCoordinateAxesObject(child) &&
+                    !VisualizationManager.isInertialHelperObject(child)) {
                     child.castShadow = this.showShadow;
                     child.receiveShadow = this.showShadow;
                     child.visible = this.showVisual;
@@ -202,6 +232,11 @@ export class VisualizationManager {
         // First pass: Process materials for visual meshes only (skip collision meshes)
         model.threeObject.traverse((child) => {
             if (child.isMesh && child.material) {
+                if (VisualizationManager.isCoordinateAxesObject(child) ||
+                    VisualizationManager.isInertialHelperObject(child)) {
+                    return;
+                }
+
                 // Check if this is a collision mesh
                 let isInCollider = false;
                 let checkNode = child;
@@ -316,6 +351,11 @@ export class VisualizationManager {
 
             // Add newly loaded visual meshes or collision meshes
             if ((child.isMesh || child.type === 'Mesh') && !this.visualMeshes.includes(child) && !this.collisionMeshes.includes(child)) {
+                if (VisualizationManager.isCoordinateAxesObject(child) ||
+                    VisualizationManager.isInertialHelperObject(child)) {
+                    return;
+                }
+
                 let isInCollider = false;
                 let checkNode = child;
                 while (checkNode) {
@@ -437,6 +477,11 @@ export class VisualizationManager {
         if (this.sceneManager && this.sceneManager.currentModel && this.sceneManager.currentModel.threeObject) {
             this.sceneManager.currentModel.threeObject.traverse((child) => {
                 if (child.isMesh && child.material && !this.collisionMeshes.includes(child)) {
+                    if (VisualizationManager.isCoordinateAxesObject(child) ||
+                        VisualizationManager.isInertialHelperObject(child)) {
+                        return;
+                    }
+
                     // Handle material arrays (common in DAE files with multiple materials)
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
 
@@ -817,29 +862,61 @@ export class VisualizationManager {
         // Check if in auxiliary object lists (will be set by InertialVisualization)
         if (obj.userData?.isInertiaBox) return true;
         if (obj.userData?.isCOMMarker) return true;
+        if (obj.userData?.isCenterOfMass) return true;
         if (obj.userData?.isCollision) return true;
 
         return false;
     }
 
     /**
-     * Update visual model transparency
-     * When COM, axes, or joint axes are enabled, set model to semi-transparent
-     * Note: Inertia visualization does NOT make model transparent
-     * Note: Only affects robot models with joints, not single meshes
+     * Apply or clear transparency on all known visual meshes (+ model sweep when clearing).
      */
-    updateVisualTransparency(showCOM, showAxes, showJointAxes, isSingleMesh) {
-        // Single mesh doesn't need transparency effect
-        if (isSingleMesh) {
-            return;
-        }
+    setTransparencyEnabled(enabled) {
+        this.transparencyEnabled = !!enabled;
+        this.applyTransparencyToVisualMeshes(this.transparencyEnabled);
+    }
 
-        // Check if any feature is enabled (inertia visualization excluded)
-        const shouldBeTransparent = showCOM || showAxes || showJointAxes;
-        // Traverse all visual meshes and set transparency
+    applyTransparencyToVisualMeshes(shouldBeTransparent) {
         this.visualMeshes.forEach((mesh, index) => {
             VisualizationManager.setMeshTransparency(mesh, shouldBeTransparent, index);
         });
+
+        const root = this.sceneManager?.currentModel?.threeObject;
+        if (!root) return;
+
+        root.traverse((child) => {
+            if (!child.isMesh || !child.material) return;
+            if (this.collisionMeshes.includes(child)) return;
+            if (VisualizationManager.isCoordinateAxesObject(child)) return;
+            if (VisualizationManager.isInertialHelperObject(child)) return;
+
+            let isCollider = false;
+            let node = child;
+            while (node) {
+                if (node.isURDFCollider) {
+                    isCollider = true;
+                    break;
+                }
+                node = node.parent;
+            }
+            if (isCollider || child.userData?.isCollision) return;
+
+            if (!this.visualMeshes.includes(child)) {
+                VisualizationManager.setMeshTransparency(child, shouldBeTransparent);
+            }
+        });
+    }
+
+    /**
+     * Auto transparency when COM / axes / joint axes overlays are shown.
+     */
+    syncTransparencyWithOverlays(showCOM, showAxes, showJointAxes, isSingleMesh) {
+        if (isSingleMesh) {
+            this.setTransparencyEnabled(false);
+            return;
+        }
+        const wantTransparent = !!(showCOM || showAxes || showJointAxes);
+        this.setTransparencyEnabled(wantTransparent);
     }
 
     /**
@@ -850,6 +927,11 @@ export class VisualizationManager {
      */
     static setMeshTransparency(mesh, shouldBeTransparent, index = -1) {
         if (!mesh.material) {
+            return;
+        }
+
+        if (VisualizationManager.isCoordinateAxesObject(mesh) ||
+            VisualizationManager.isInertialHelperObject(mesh)) {
             return;
         }
 
@@ -870,12 +952,12 @@ export class VisualizationManager {
                 material.opacity = 0.5;
                 material.needsUpdate = true;
             } else {
-                // Restore original state
-                if (material.userData.originalOpacity !== undefined) {
-                    material.opacity = material.userData.originalOpacity;
-                    material.transparent = material.userData.originalTransparent;
-                    material.needsUpdate = true;
-                }
+                const opacity = material.userData.originalOpacity;
+                const transparent = material.userData.originalTransparent;
+                material.opacity = opacity !== undefined ? opacity : 1;
+                material.transparent = transparent !== undefined ? transparent : false;
+                material.depthWrite = true;
+                material.needsUpdate = true;
             }
         });
     }

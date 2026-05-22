@@ -223,20 +223,9 @@ export class SceneManager {
         // Extract visual and collision bodies
         this.visualizationManager.extractVisualAndCollision(model);
 
-        // Calculate model size for dynamic axis adjustment
-        let modelSize = 1.0; // Default value
-        try {
-            if (model.threeObject) {
-                model.threeObject.updateMatrixWorld(true);
-                const bbox = new THREE.Box3().setFromObject(model.threeObject);
-                if (!bbox.isEmpty()) {
-                    const size = bbox.getSize(new THREE.Vector3());
-                    modelSize = Math.max(size.x, size.y, size.z);
-                }
-            }
-        } catch (error) {
-            // Failed to calculate model size, using default
-        }
+        const modelSize = CoordinateAxesManager.measureObjectScale(model.threeObject, 1);
+        this.axesManager.setModelScale(modelSize);
+        this.inertialVisualization.setModelScale(modelSize);
 
         // Create local coordinate system for each link (pass model size)
         this.axesManager.clearAllLinkAxes();
@@ -251,13 +240,13 @@ export class SceneManager {
         if (model.joints) {
             let rotaryJointCount = 0;
             model.joints.forEach((joint, jointName) => {
-                if (this.axesManager.createJointAxis(joint, jointName)) {
+                if (this.axesManager.createJointAxis(joint, jointName, modelSize)) {
                     rotaryJointCount++;
                 }
             });
         }
 
-        // Extract COM and inertia information
+        // COM / inertia (rebuilt again after async mesh load — see refreshScaleDependentVisualizations)
         this.inertialVisualization.extractInertialProperties(model);
 
         // Visualize parallel mechanism constraints
@@ -277,12 +266,10 @@ export class SceneManager {
 
         if (isSingleMesh) {
             // Single mesh: synchronous loading, delay camera adjustment to keep snapshot occlusion
-            // Use requestAnimationFrame to ensure rendering completes
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     this.updateEnvironment(true);
-
-                    // Trigger model ready event
+                    this.refreshScaleDependentVisualizations();
                     this.emit('modelReady', model);
                 });
             });
@@ -296,13 +283,72 @@ export class SceneManager {
             setTimeout(() => {
                 this.visualizationManager.extractVisualAndCollision(model);
                 this.updateEnvironment(true);
+                this.refreshScaleDependentVisualizations();
                 this.emit('modelReady', model);
             }, 1000);
 
             setTimeout(() => {
                 this.visualizationManager.extractVisualAndCollision(model);
+                this.refreshScaleDependentVisualizations();
             }, 2500);
         }
+    }
+
+    /**
+     * Re-measure robot height after meshes finish loading, then rebuild scale-dependent overlays.
+     * Updates link axes, joint axes, and COM/inertia so sizes match the final bbox (not the initial stub).
+     * No-op if span changed by less than ~2% since the last pass.
+     */
+    refreshScaleDependentVisualizations() {
+        const model = this.currentModel;
+        if (!model?.threeObject) return;
+
+        if (this.world) {
+            this.world.updateMatrixWorld(true);
+        }
+        model.threeObject.updateMatrixWorld(true);
+
+        const modelSize = CoordinateAxesManager.measureObjectScale(model.threeObject, 1);
+        const prevScale = this.axesManager.modelScale || 1;
+        const scaleChanged = Math.abs(modelSize - prevScale) / Math.max(prevScale, 1e-6) > 0.02;
+
+        if (!scaleChanged && prevScale > 1.01) {
+            return;
+        }
+
+        this.axesManager.setModelScale(modelSize);
+        this.inertialVisualization.setModelScale(modelSize);
+
+        const axesWereVisible = this.axesManager.showAxesEnabled;
+        const jointAxesWereVisible = this.axesManager.showJointAxesEnabled;
+
+        // Recreate link coordinate triads at the new uniform scale
+        this.axesManager.clearAllLinkAxes();
+        if (model.links) {
+            model.links.forEach((link, linkName) => {
+                this.axesManager.createLinkAxes(link, linkName, modelSize);
+            });
+        }
+
+        // Recreate joint axis overlays at the new scale
+        this.axesManager.clearAllJointAxes();
+        if (model.joints) {
+            model.joints.forEach((joint, jointName) => {
+                this.axesManager.createJointAxis(joint, jointName, modelSize);
+            });
+        }
+
+        if (axesWereVisible) {
+            this.axesManager.showAllAxes();
+        }
+        if (jointAxesWereVisible) {
+            this.axesManager.showAllJointAxes();
+        }
+
+        // Rebuild COM / inertia markers (uniform COM radius uses modelScale)
+        this.inertialVisualization.extractInertialProperties(model);
+        this.updateVisualTransparency();
+        this.redraw();
     }
 
     removeModel(model) {
@@ -502,6 +548,77 @@ export class SceneManager {
         }
 
         // Trigger render immediately to show coordinate system change
+        this.redraw();
+    }
+
+    /**
+     * Get model center and camera distance for standard views
+     */
+    getModelViewTarget() {
+        const root = this.currentModel?.threeObject;
+        if (!root) {
+            return { center: new THREE.Vector3(0, 0, 0), distance: 3 };
+        }
+
+        root.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(root);
+        if (box.isEmpty()) {
+            return { center: new THREE.Vector3(0, 0, 0), distance: 3 };
+        }
+
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+        const fov = this.camera.fov * (Math.PI / 180);
+        const isSingleMesh = !this.currentModel.joints || this.currentModel.joints.size === 0;
+        const distanceMultiplier = isSingleMesh ? 2.5 : 1.8;
+        const distance = maxDim / (2 * Math.tan(fov / 2)) * distanceMultiplier;
+
+        return { center, distance: Math.max(distance, 0.5) };
+    }
+
+    /**
+     * Set camera to a standard orthographic-style view (URDF: X front, Y left, Z up)
+     */
+    setView(view) {
+        if (!view) return;
+
+        const views = {
+            front: { dir: new THREE.Vector3(1, 0, 0), up: null },
+            back: { dir: new THREE.Vector3(-1, 0, 0), up: null },
+            left: { dir: new THREE.Vector3(0, 1, 0), up: null },
+            right: { dir: new THREE.Vector3(0, -1, 0), up: null },
+            top: { dir: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(-1, 0, 0) },
+            bottom: { dir: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(1, 0, 0) },
+            iso: { dir: new THREE.Vector3(1, 1, 1).normalize(), up: null }
+        };
+
+        const preset = views[view];
+        if (!preset) return;
+
+        const dir = preset.dir.clone();
+        let up = preset.up ? preset.up.clone() : null;
+
+        if (this.world) {
+            const worldQuat = new THREE.Quaternion();
+            this.world.getWorldQuaternion(worldQuat);
+            dir.applyQuaternion(worldQuat);
+            if (up) up.applyQuaternion(worldQuat);
+        }
+
+        const { center, distance } = this.getModelViewTarget();
+        this.camera.position.copy(center).add(dir.multiplyScalar(distance));
+        this.controls.target.copy(center);
+
+        if (up) {
+            this.camera.up.copy(up);
+            this.camera.lookAt(center);
+        } else {
+            this.camera.up.set(0, 1, 0);
+        }
+
+        this.controls.update();
+        this.camera.updateProjectionMatrix();
         this.redraw();
     }
 
@@ -743,57 +860,9 @@ export class SceneManager {
         const maxDim = Math.max(size.x, size.y, size.z);
         const center = bbox.getCenter(new THREE.Vector3());
 
-        // Create axes helper - reasonably scaled based on model size
-        const axesSize = Math.max(maxDim * 2.5, 0.5); // 2.5x model size, minimum 0.5m
-        const axesGroup = new THREE.Group();
+        const axesSize = Math.max(maxDim * 2.5, 0.5);
+        const axesGroup = CoordinateAxesManager.createGizmoStyleAxesGroup(axesSize);
         axesGroup.name = 'meshCoordinateAxes';
-
-        // Create three axes (X-red, Y-green, Z-blue)
-        const axisRadius = Math.max(axesSize * 0.02, 0.008); // Axis thickness 2% of length, minimum 8mm
-        const axisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axesSize, 16);
-        // X axis (red)
-        const xAxisMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            shininess: 30,
-            depthTest: true,
-            side: THREE.DoubleSide
-        });
-        const xAxis = new THREE.Mesh(axisGeometry, xAxisMaterial);
-        xAxis.position.x = axesSize / 2;
-        xAxis.rotation.z = -Math.PI / 2;
-        xAxis.castShadow = false;
-        xAxis.receiveShadow = false;
-        xAxis.name = 'xAxis';
-        axesGroup.add(xAxis);
-
-        // Y axis (green)
-        const yAxisMaterial = new THREE.MeshPhongMaterial({
-            color: 0x00ff00,
-            shininess: 30,
-            depthTest: true,
-            side: THREE.DoubleSide
-        });
-        const yAxis = new THREE.Mesh(axisGeometry, yAxisMaterial);
-        yAxis.position.y = axesSize / 2;
-        yAxis.castShadow = false;
-        yAxis.receiveShadow = false;
-        yAxis.name = 'yAxis';
-        axesGroup.add(yAxis);
-
-        // Z axis (blue)
-        const zAxisMaterial = new THREE.MeshPhongMaterial({
-            color: 0x0000ff,
-            shininess: 30,
-            depthTest: true,
-            side: THREE.DoubleSide
-        });
-        const zAxis = new THREE.Mesh(axisGeometry, zAxisMaterial);
-        zAxis.position.z = axesSize / 2;
-        zAxis.rotation.x = Math.PI / 2;
-        zAxis.castShadow = false;
-        zAxis.receiveShadow = false;
-        zAxis.name = 'zAxis';
-        axesGroup.add(zAxis);
 
         // Add directly to meshObject, display at its local coordinate system origin
         meshObject.add(axesGroup);
@@ -866,20 +935,46 @@ export class SceneManager {
     // ==================== Visual Transparency Update ====================
 
     /**
-     * Update visual model transparency
-     * When COM, axes, or joint axes enabled, set model to semi-transparent
-     * Note: Only affects robot models with joints, not single meshes
+     * Sync transparency with overlay toggles (COM / axes / joint axes) and update UI button.
      */
     updateVisualTransparency() {
-        // Check if single mesh model (no joints)
         const isSingleMesh = !this.currentModel || !this.currentModel.joints || this.currentModel.joints.size === 0;
 
-        this.visualizationManager.updateVisualTransparency(
+        this.visualizationManager.syncTransparencyWithOverlays(
             this.inertialVisualization.showCOM,
             this.axesManager.showAxesEnabled,
             this.axesManager.showJointAxesEnabled,
             isSingleMesh
         );
+
+        this.syncTransparencyButton();
+        this.applyMujocoTransparency();
+    }
+
+    /**
+     * Manual transparency toggle (independent of overlay buttons).
+     */
+    setTransparencyEnabled(enabled) {
+        this.visualizationManager.setTransparencyEnabled(enabled);
+        this.syncTransparencyButton();
+        this.applyMujocoTransparency();
+        this.redraw();
+        this.render();
+    }
+
+    syncTransparencyButton() {
+        const btn = document.getElementById('toggle-transparency-btn');
+        if (!btn) return;
+        const on = this.visualizationManager.transparencyEnabled;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('data-checked', on ? 'true' : 'false');
+    }
+
+    applyMujocoTransparency() {
+        const mujocoManager = window.app?.mujocoSimulationManager;
+        if (mujocoManager?.hasScene?.()) {
+            mujocoManager.applyTransparencyState();
+        }
     }
 
     // ==================== Theme & Resize ====================

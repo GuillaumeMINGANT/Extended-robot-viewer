@@ -317,6 +317,7 @@ export class FileHandler {
                     { usdViewerManager: this.usdViewerManager }
                 );
 
+                this.attachSourceFileName(model, file);
                 this.onModelLoaded?.(model, file, false, null);
                 document.getElementById('drop-zone')?.classList.remove('show');
                 document.getElementById('drop-zone')?.classList.remove('drag-over');
@@ -352,7 +353,7 @@ export class FileHandler {
                 { usdViewerManager: this.usdViewerManager }
             );
 
-            // Notify model loaded (pass null as snapshot, let main.js create it)
+            this.attachSourceFileName(model, file);
             this.onModelLoaded?.(model, file, false, null);
 
             document.getElementById('drop-zone')?.classList.remove('show');
@@ -519,6 +520,7 @@ export class FileHandler {
             };
 
             this.currentModelFile = file;
+            this.attachSourceFileName(simpleMeshModel, file);
             this.onModelLoaded?.(simpleMeshModel, file, true, null);
 
         } catch (error) {
@@ -529,6 +531,17 @@ export class FileHandler {
                 snapshot.parentNode.removeChild(snapshot);
             }
         }
+    }
+
+    /**
+     * Store the loaded description filename on the model (for exports, etc.).
+     * @param {object} model
+     * @param {File|string} fileOrName
+     */
+    attachSourceFileName(model, fileOrName) {
+        if (!model) return;
+        const name = typeof fileOrName === 'string' ? fileOrName : fileOrName?.name;
+        if (name) model.sourceFileName = name;
     }
 
     /**

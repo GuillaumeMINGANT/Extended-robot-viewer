@@ -357,6 +357,149 @@ export class ModelLoaderFactory {
     }
 
     /**
+     * Resolve a mesh path from URDF against a remote base URL.
+     * @param {string} path
+     * @param {string} baseUrl - Trailing slash optional
+     */
+    static resolveMeshUrl(path, baseUrl) {
+        if (!path) return path;
+        if (/^(https?:|data:|blob:)/i.test(path)) {
+            return path;
+        }
+        let relative = path;
+        if (relative.startsWith('package://')) {
+            relative = relative.replace(/^package:\/\/[^/]+\/?/, '');
+        }
+        const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+        return new URL(relative.replace(/^\.\//, ''), base).href;
+    }
+
+    /**
+     * Load a mesh from HTTP(S) for remote URDF catalogs.
+     */
+    static async loadMeshFromUrl(url, ext, manager) {
+        switch (ext) {
+            case 'stl': {
+                const { STLLoader } = await import('three/examples/jsm/loaders/STLLoader.js');
+                const stlLoader = new STLLoader(manager);
+                const stlGeometry = await new Promise((resolve, reject) => {
+                    stlLoader.load(url, resolve, undefined, reject);
+                });
+                return new THREE.Mesh(stlGeometry, new THREE.MeshPhongMaterial());
+            }
+            case 'dae': {
+                const { ColladaLoader } = await import('three/examples/jsm/loaders/ColladaLoader.js');
+                const colladaLoader = new ColladaLoader(manager);
+                const colladaModel = await new Promise((resolve, reject) => {
+                    colladaLoader.load(url, resolve, undefined, reject);
+                });
+                const meshObject = colladaModel.scene;
+                if (meshObject?.traverse) {
+                    const lightsToRemove = [];
+                    meshObject.traverse((child) => {
+                        if (child.isLight) lightsToRemove.push(child);
+                    });
+                    lightsToRemove.forEach((light) => light.parent?.remove(light));
+                }
+                return meshObject;
+            }
+            case 'obj': {
+                const { OBJLoader } = await import('three/examples/jsm/loaders/OBJLoader.js');
+                const objLoader = new OBJLoader(manager);
+                return new Promise((resolve, reject) => {
+                    objLoader.load(url, resolve, undefined, reject);
+                });
+            }
+            case 'gltf':
+            case 'glb': {
+                const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+                const gltfLoader = new GLTFLoader(manager);
+                const gltfModel = await new Promise((resolve, reject) => {
+                    gltfLoader.load(url, resolve, undefined, reject);
+                });
+                return gltfModel.scene;
+            }
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Load URDF from a remote URL (catalog CDN). No local fileMap required.
+     * @param {string} urdfUrl - Absolute URDF URL
+     * @param {{ applyRosZUp?: boolean, catalogEntry?: object }} options
+     */
+    static async loadURDFFromUrl(urdfUrl, options = {}) {
+        const { applyRosZUp = false, catalogEntry = null } = options;
+        const baseUrl = urdfUrl.substring(0, urdfUrl.lastIndexOf('/') + 1);
+
+        let URDFLoader;
+        try {
+            const urdfModule = await import('urdf-loader');
+            URDFLoader = urdfModule.URDFLoader || urdfModule.default || urdfModule;
+        } catch (error) {
+            throw new Error('Failed to load urdf-loader: ' + error.message);
+        }
+
+        const contentRes = await fetch(urdfUrl);
+        if (!contentRes.ok) {
+            throw new Error(`Failed to fetch URDF (${contentRes.status})`);
+        }
+        const content = await contentRes.text();
+
+        return new Promise((resolve, reject) => {
+            const loader = new URDFLoader();
+            loader.parseCollision = true;
+            loader.packages = '';
+
+            const originalLoadMeshCb =
+                loader.loadMeshCb || loader.defaultMeshLoader.bind(loader);
+
+            loader.loadMeshCb = (path, manager, done) => {
+                const meshUrl = ModelLoaderFactory.resolveMeshUrl(path, baseUrl);
+                const ext = meshUrl.toLowerCase().split('.').pop().split('?')[0];
+
+                ModelLoaderFactory.loadMeshFromUrl(meshUrl, ext, manager)
+                    .then((meshObject) => {
+                        if (meshObject) {
+                            done(meshObject, null);
+                        } else {
+                            originalLoadMeshCb(meshUrl, manager, done);
+                        }
+                    })
+                    .catch(() => {
+                        originalLoadMeshCb(meshUrl, manager, done);
+                    });
+            };
+
+            loader.load(
+                urdfUrl,
+                (robot) => {
+                    if (applyRosZUp) {
+                        robot.rotation.x = -Math.PI / 2;
+                        robot.updateMatrix();
+                    }
+                    try {
+                        const model = URDFAdapter.convert(robot, content);
+                        if (!model.userData) model.userData = {};
+                        model.userData.loadedFromCatalog = true;
+                        model.userData.catalogUrdfUrl = urdfUrl;
+                        model.userData.catalogUrdfContent = content;
+                        model.userData.catalogEntry = options.catalogEntry ?? null;
+                        resolve(model);
+                    } catch (error) {
+                        reject(new Error('URDF conversion failed: ' + error.message));
+                    }
+                },
+                undefined,
+                (error) => {
+                    reject(new Error('URDF loading failed: ' + (error?.message || error)));
+                }
+            );
+        });
+    }
+
+    /**
      * Load Xacro
      * @param {string} content - Xacro content
      * @param {string} fileName - Xacro file key in fileMap (includes path)

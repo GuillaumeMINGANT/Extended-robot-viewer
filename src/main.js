@@ -18,6 +18,7 @@ import { MujocoSimulationManager } from './renderer/MujocoSimulationManager.js';
 import { MeasurePanelController } from './controllers/MeasurePanelController.js';
 import { MeasureUnitsStatusBar } from './ui/MeasureUnitsStatusBar.js';
 import { i18n } from './utils/i18n.js';
+import { RobotCatalogPanel } from './ui/RobotCatalogPanel.js';
 
 // Expose d3 globally for PanelManager
 window.d3 = d3;
@@ -46,6 +47,7 @@ class App {
         this.currentMJCFModel = null;
         this.angleUnit = 'rad';
         this.vscodeFileMap = new Map(); // Store VSCode files
+        this.robotCatalogPanel = null;
     }
 
     /**
@@ -156,6 +158,13 @@ class App {
             this.fileTreeView = new FileTreeView();
             this.fileTreeView.onFileClick = (fileInfo) => {
                 this.handleFileClick(fileInfo);
+            };
+
+            this.robotCatalogPanel = new RobotCatalogPanel({
+                onSelectModel: (entry) => this.fileHandler.loadCatalogModel(entry)
+            });
+            this.fileTreeView.onOpenCatalog = () => {
+                this.robotCatalogPanel?.open();
             };
 
             // Initialize file tree with empty state (shows load button)
@@ -890,6 +899,10 @@ class App {
      */
     handleLanguageChanged(lang) {
         i18n.setLanguage(lang);
+
+        if (this.robotCatalogPanel) {
+            this.robotCatalogPanel.refreshLocale();
+        }
 
         // Update code editor save status text
         if (this.codeEditorManager) {

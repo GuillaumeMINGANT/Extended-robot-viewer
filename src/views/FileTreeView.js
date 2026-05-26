@@ -7,6 +7,8 @@ export class FileTreeView {
     constructor() {
         this.availableModels = [];
         this.onFileClick = null;
+        /** Opens the remote robot catalog sidebar */
+        this.onOpenCatalog = null;
     }
 
     /**
@@ -70,12 +72,23 @@ export class FileTreeView {
         emptyText.appendChild(line1);
         emptyText.appendChild(line2);
 
-        // Create button container for two buttons
+        // Row 1: Load Files + Load Folder
         const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'file-tree-load-buttons';
         buttonContainer.style.cssText = `
             display: flex;
+            flex-direction: column;
             gap: 8px;
             margin-top: 8px;
+            width: 100%;
+            max-width: 100%;
+        `;
+
+        const buttonRow = document.createElement('div');
+        buttonRow.style.cssText = `
+            display: flex;
+            gap: 8px;
+            width: 100%;
         `;
 
         // Load Files Button
@@ -116,8 +129,29 @@ export class FileTreeView {
             this.triggerFileLoad(true);
         });
 
-        buttonContainer.appendChild(loadFilesButton);
-        buttonContainer.appendChild(loadFolderButton);
+        buttonRow.appendChild(loadFilesButton);
+        buttonRow.appendChild(loadFolderButton);
+        buttonContainer.appendChild(buttonRow);
+
+        const loadCatalogButton = document.createElement('button');
+        loadCatalogButton.className = 'control-button load-catalog-btn';
+        loadCatalogButton.type = 'button';
+        const loadCatalogSpan = document.createElement('span');
+        loadCatalogSpan.textContent = window.i18n?.t('loadFromCatalog') || 'Load from catalog';
+        loadCatalogSpan.setAttribute('data-i18n', 'loadFromCatalog');
+        loadCatalogButton.appendChild(loadCatalogSpan);
+        loadCatalogButton.style.cssText = `
+            padding: 8px 16px;
+            font-size: 13px;
+            width: 100%;
+            box-sizing: border-box;
+        `;
+        loadCatalogButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.onOpenCatalog?.();
+        });
+        buttonContainer.appendChild(loadCatalogButton);
 
         emptyContainer.appendChild(emptyText);
         emptyContainer.appendChild(buttonContainer);

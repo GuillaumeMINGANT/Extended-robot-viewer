@@ -9,6 +9,7 @@ import { ConstraintManager } from './ConstraintManager.js';
 import { CoordinateAxesManager } from './CoordinateAxesManager.js';
 import { HighlightManager } from './HighlightManager.js';
 import { MeasurementManager } from './MeasurementManager.js';
+import { WorldAxesGizmo } from './WorldAxesGizmo.js';
 
 /**
  * SceneManager - Core scene management and coordination
@@ -95,6 +96,11 @@ export class SceneManager {
         this.highlightManager = new HighlightManager(this);
         this.measurementManager = new MeasurementManager(this);
 
+        // World axes gizmo (SolidWorks-style orientation indicator)
+        this.worldAxesGizmo = new WorldAxesGizmo(this.camera, canvas.parentElement);
+        const initUpSelect = document.getElementById('up-select');
+        this.worldAxesGizmo.setUpAxis(initUpSelect?.value || '+Z');
+
         // Current model
         this.currentModel = null;
         this.ignoreLimits = false;
@@ -119,10 +125,12 @@ export class SceneManager {
      */
     startRenderLoop() {
         const renderLoop = () => {
-            // Only render when needed (controlled by _dirty flag)
             if (this._dirty) {
                 this.renderer.render(this.scene, this.camera);
                 this._dirty = false;
+            }
+            if (this.worldAxesGizmo) {
+                this.worldAxesGizmo.update();
             }
             this._renderLoopId = requestAnimationFrame(renderLoop);
         };
@@ -135,7 +143,11 @@ export class SceneManager {
             this._renderLoopId = null;
         }
 
-        // Clean up ResizeObserver
+        if (this.worldAxesGizmo) {
+            this.worldAxesGizmo.dispose();
+            this.worldAxesGizmo = null;
+        }
+
         if (this.resizeObserver) {
             this.resizeObserver.disconnect();
             this.resizeObserver = null;
@@ -484,6 +496,10 @@ export class SceneManager {
 
         // Ensure matrix update
         this.world.updateMatrixWorld(true);
+
+        if (this.worldAxesGizmo) {
+            this.worldAxesGizmo.setUpAxis(up);
+        }
 
         // Trigger render immediately to show coordinate system change
         this.redraw();

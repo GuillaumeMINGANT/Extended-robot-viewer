@@ -19,6 +19,8 @@ import { MeasurePanelController } from './controllers/MeasurePanelController.js'
 import { MeasureUnitsStatusBar } from './ui/MeasureUnitsStatusBar.js';
 import { i18n } from './utils/i18n.js';
 import { RobotCatalogPanel } from './ui/RobotCatalogPanel.js';
+import { SettingsPanel } from './ui/SettingsPanel.js';
+import { PerformanceMonitor } from './ui/PerformanceMonitor.js';
 
 // Expose d3 globally for PanelManager
 window.d3 = d3;
@@ -126,6 +128,8 @@ class App {
             this.sceneManager = new SceneManager(canvas);
             window.sceneManager = this.sceneManager; // For debugging
 
+            this.performanceMonitor = new PerformanceMonitor();
+
             // Create USD viewer container (container only, WASM initialized on demand)
             this.createUSDViewerContainer();
 
@@ -189,6 +193,16 @@ class App {
                 onResetJoints: () => this.handleResetJoints(),
                 onMujocoReset: () => this.handleMujocoReset(),
                 onMujocoToggleSimulate: () => this.handleMujocoToggleSimulate()
+            });
+
+            this.settingsPanel = new SettingsPanel({
+                onThemeChanged: (theme) => this.handleThemeChanged(theme),
+                onLanguageChanged: (lang) => this.handleLanguageChanged(lang),
+                onFloorGridChanged: (visible) => {
+                    this.sceneManager?.environmentManager?.setGridVisible(visible);
+                    this.sceneManager?.redraw();
+                },
+                performanceMonitor: this.performanceMonitor
             });
 
             // Set measurement update callback
@@ -904,6 +918,10 @@ class App {
             this.robotCatalogPanel.refreshLocale();
         }
 
+        if (this.settingsPanel) {
+            this.settingsPanel.refreshLocale();
+        }
+
         // Update code editor save status text
         if (this.codeEditorManager) {
             this.codeEditorManager.updateEditorSaveStatus();
@@ -1044,6 +1062,7 @@ class App {
      */
     animate() {
         requestAnimationFrame(() => this.animate());
+        const frameStart = performance.now();
         if (this.sceneManager) {
             this.sceneManager.update();
 
@@ -1054,6 +1073,7 @@ class App {
 
             this.sceneManager.render();
         }
+        this.performanceMonitor?.recordFrame(performance.now() - frameStart);
     }
 }
 

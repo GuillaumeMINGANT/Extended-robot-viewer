@@ -258,6 +258,19 @@ export class EnvironmentManager {
     }
 
     /**
+     * Set floor reference grid visibility
+     */
+    setGridVisible(visible) {
+        if (this.referenceGrid) {
+            this.referenceGrid.visible = visible;
+        }
+    }
+
+    isGridVisible() {
+        return this.referenceGrid ? this.referenceGrid.visible : true;
+    }
+
+    /**
      * Enable/disable shadows
      */
     setShadowEnabled(enabled, renderer) {

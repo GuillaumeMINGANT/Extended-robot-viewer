@@ -6,33 +6,49 @@
 import * as THREE from 'three';
 import { CoordinateAxesManager } from '../renderer/CoordinateAxesManager.js';
 import { InertialVisualization } from '../renderer/InertialVisualization.js';
+import { HumanoidKinematicsAnalyzer } from '../kinematics/HumanoidKinematicsAnalyzer.js';
+import {
+    loadMeasureUnits,
+    formatAngleFromRad,
+    formatLinearFromMeters,
+    formatVelocityFromRadS,
+    formatMeasureDecimal,
+    formatTorqueFromNm,
+    angleUnitLabel,
+    linearUnitLabel,
+    velocityUnitLabel,
+    torqueUnitLabel
+} from '../utils/MeasureUnitSettings.js';
 
 export class MeasurePanelController {
     constructor(sceneManager) {
         this.sceneManager = sceneManager;
         this.currentModel = null;
+        /** Display units for all measure tabs (see MeasureUnitSettings.js). */
+        this.measureUnits = loadMeasureUnits();
         this.activeTab = 'overview';
+        /** Distance tab: two joint names + scene overlays. */
         this.distanceSelection = { first: null, second: null };
         this.distanceLine = null;
         this.distanceLabels = [];
         this.sortColumn = null;
         this.sortAscending = true;
 
+        // Overview tab optional 3D helpers
         this.showGlobalCOM = false;
         this.globalCOMMarker = null;
         this.showBBox = false;
         this.bboxHelper = null;
 
-        this._limbsCache = null;
-        this._linkToLimbMap = null;
+        /** Cached HumanoidKinematicsAnalyzer result per model load. */
+        this._kinematicsCache = null;
     }
 
     update(model) {
         this.currentModel = model;
         this.clearDistanceMeasurement();
         this.clearOverlays();
-        this._limbsCache = null;
-        this._linkToLimbMap = null;
+        this._kinematicsCache = null;
         this.render();
     }
 
@@ -40,8 +56,7 @@ export class MeasurePanelController {
         this.currentModel = null;
         this.clearDistanceMeasurement();
         this.clearOverlays();
-        this._limbsCache = null;
-        this._linkToLimbMap = null;
+        this._kinematicsCache = null;
         const container = document.getElementById('measure-panel-content');
         if (container) {
             const t = (k) => window.i18n?.t(k) || k;
@@ -49,9 +64,13 @@ export class MeasurePanelController {
         }
     }
 
+    /** Rebuild tab bar + active tab content (called on model change and unit change). */
     render() {
         const container = document.getElementById('measure-panel-content');
         if (!container || !this.currentModel) return;
+
+        // Legacy tab id from older builds
+        if (this.activeTab === 'limbs') this.activeTab = 'joints';
 
         const t = (k) => window.i18n?.t(k) || k;
         container.innerHTML = '';
@@ -62,7 +81,7 @@ export class MeasurePanelController {
         const tabs = [
             { id: 'overview', label: t('measureOverview') },
             { id: 'links', label: t('measureLinks') },
-            { id: 'limbs', label: t('measureLimbs') },
+            { id: 'joints', label: t('measureJointIdentification') },
             { id: 'distance', label: t('measureDistance') }
         ];
 
@@ -80,11 +99,14 @@ export class MeasurePanelController {
 
         const content = document.createElement('div');
         content.className = 'measure-tab-content';
+        if (this.activeTab === 'links' || this.activeTab === 'joints') {
+            content.classList.add('measure-tab-content--table');
+        }
 
         switch (this.activeTab) {
             case 'overview': this.renderOverview(content); break;
             case 'links': this.renderLinksTable(content); break;
-            case 'limbs': this.renderLimbsTable(content); break;
+            case 'joints': this.renderJointsTable(content); break;
             case 'distance': this.renderDistanceTool(content); break;
         }
         container.appendChild(content);
@@ -96,6 +118,8 @@ export class MeasurePanelController {
         const model = this.currentModel;
         const t = (k) => window.i18n?.t(k) || k;
         const stats = this.computeOverviewStats(model);
+        // bbox/com are in meters; format with user's linear unit
+        const fmt = (m) => this.formatLinearDisplay(m);
 
         const html = `
             <div class="measure-overview">
@@ -110,11 +134,11 @@ export class MeasurePanelController {
                     </div>
                     <div class="measure-stat-grid">
                         <span class="measure-dim-label">X:</span>
-                        <span class="measure-dim-value">${(stats.bbox.x * 1000).toFixed(1)} mm</span>
+                        <span class="measure-dim-value">${fmt(stats.bbox.x)}</span>
                         <span class="measure-dim-label">Y:</span>
-                        <span class="measure-dim-value">${(stats.bbox.y * 1000).toFixed(1)} mm</span>
+                        <span class="measure-dim-value">${fmt(stats.bbox.y)}</span>
                         <span class="measure-dim-label">Z:</span>
-                        <span class="measure-dim-value">${(stats.bbox.z * 1000).toFixed(1)} mm</span>
+                        <span class="measure-dim-value">${fmt(stats.bbox.z)}</span>
                     </div>
                     <button class="measure-refresh-mini" id="measure-refresh-bbox" title="${t('measureRefresh')}">⟳</button>
                 </div>
@@ -125,11 +149,11 @@ export class MeasurePanelController {
                     </div>
                     <div class="measure-stat-grid">
                         <span class="measure-dim-label">X:</span>
-                        <span class="measure-dim-value">${(stats.com.x * 1000).toFixed(1)} mm</span>
+                        <span class="measure-dim-value">${fmt(stats.com.x)}</span>
                         <span class="measure-dim-label">Y:</span>
-                        <span class="measure-dim-value">${(stats.com.y * 1000).toFixed(1)} mm</span>
+                        <span class="measure-dim-value">${fmt(stats.com.y)}</span>
                         <span class="measure-dim-label">Z:</span>
-                        <span class="measure-dim-value">${(stats.com.z * 1000).toFixed(1)} mm</span>
+                        <span class="measure-dim-value">${fmt(stats.com.z)}</span>
                     </div>
                     <button class="measure-refresh-mini" id="measure-refresh-com" title="${t('measureRefresh')}">⟳</button>
                 </div>
@@ -178,6 +202,7 @@ export class MeasurePanelController {
         });
     }
 
+    /** Mass-weighted COM and axis-aligned bbox size (all lengths in meters). */
     computeOverviewStats(model) {
         let totalMass = 0;
         const com = new THREE.Vector3();
@@ -350,156 +375,370 @@ export class MeasurePanelController {
         this.showBBox = false;
     }
 
-    // ==================== Limb Identification ====================
+    // ==================== Limb / joint identification ====================
+
+    /** Joint Identification / Links category columns (cached until model changes). */
+    getKinematicsAnalysis(model = this.currentModel) {
+        if (!model) return { jointRows: [], linkCategories: new Map() };
+        if (!this._kinematicsCache) {
+            this._kinematicsCache = HumanoidKinematicsAnalyzer.analyze(model);
+        }
+        return this._kinematicsCache;
+    }
+
+    formatCategoryBadges(categories) {
+        if (!categories?.length) return '—';
+        return categories.map(cat =>
+            `<span class="measure-category-badge">${cat}</span>`
+        ).join('');
+    }
+
+    formatJointAxisLabel(axis, t) {
+        if (axis === 'yaw') return t('measureJointAxisYaw');
+        if (axis === 'pitch') return t('measureJointAxisPitch');
+        if (axis === 'roll') return t('measureJointAxisRoll');
+        return '—';
+    }
+
+    formatCategoriesPlain(categories) {
+        return categories?.length ? categories.join(', ') : '—';
+    }
+
+    getJointTableColumns(t) {
+        const u = this.measureUnits;
+        const ang = angleUnitLabel(u.angle);
+        const lin = linearUnitLabel(u.linear);
+        const vel = velocityUnitLabel(u.velocity);
+        return [
+            { key: 'name', label: t('measureJoint') },
+            { key: 'type', label: t('type') },
+            { key: 'categoryPlain', label: t('measureLimbCategory') },
+            { key: 'jointAxisLabel', label: t('measureJointAxis') },
+            { key: 'limitMin', label: `${t('measureLimitMin')} (${ang} / ${lin})` },
+            { key: 'limitMax', label: `${t('measureLimitMax')} (${ang} / ${lin})` },
+            { key: 'torque', label: `${t('measureTorque')} (${torqueUnitLabel(u.torque)})`, sortKey: 'torqueSort' },
+            { key: 'velocity', label: `${t('measureUnitVelocity')} (${vel})`, sortKey: 'velocitySort' }
+        ];
+    }
+
+    compareMeasureRows(a, b, columnKey) {
+        const numericKeys = {
+            mass: 'mass',
+            length: 'length',
+            limitMin: 'limitMinSort',
+            limitMax: 'limitMaxSort',
+            torque: 'torqueSort',
+            torqueSort: 'torqueSort',
+            velocity: 'velocitySort',
+            velocitySort: 'velocitySort'
+        };
+        const numericField = numericKeys[columnKey];
+        if (numericField) {
+            const va = a[numericField];
+            const vb = b[numericField];
+            const aNum = typeof va === 'number' ? va : -Infinity;
+            const bNum = typeof vb === 'number' ? vb : -Infinity;
+            return this.sortAscending ? aNum - bNum : bNum - aNum;
+        }
+
+        let va = a[columnKey];
+        let vb = b[columnKey];
+        if (typeof va === 'number' && typeof vb === 'number') {
+            return this.sortAscending ? va - vb : vb - va;
+        }
+        va = String(va || '');
+        vb = String(vb || '');
+        return this.sortAscending ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
 
     /**
-     * Classify a link/joint name into an anatomical category using
-     * standardized ROS / human-anatomy keywords.
+     * Link length for the table (returns mm for sorting; display uses formatLinkLength).
+     * Prefer parent joint origin offset; fallback to world-space parent→child distance.
      */
-    classifyLimbCategory(linkNames, jointNames) {
-        const allNames = [...linkNames, ...jointNames].map(n => n.toLowerCase());
-        const text = allNames.join(' ');
+    computeLinkLengthMm(model, linkName) {
+        if (!model?.links || !model?.joints) return null;
 
-        const patterns = [
-            { category: 'Right Hand', keywords: ['right_hand', 'r_hand', 'rhand', 'right_finger', 'r_finger', 'right_gripper', 'r_gripper'] },
-            { category: 'Left Hand',  keywords: ['left_hand', 'l_hand', 'lhand', 'left_finger', 'l_finger', 'left_gripper', 'l_gripper'] },
-            { category: 'Right Arm',  keywords: ['right_shoulder', 'right_elbow', 'right_wrist', 'r_shoulder', 'r_elbow', 'r_wrist', 'right_arm', 'r_arm', 'rarm', 'right_upper_arm', 'right_forearm'] },
-            { category: 'Left Arm',   keywords: ['left_shoulder', 'left_elbow', 'left_wrist', 'l_shoulder', 'l_elbow', 'l_wrist', 'left_arm', 'l_arm', 'larm', 'left_upper_arm', 'left_forearm'] },
-            { category: 'Right Leg',  keywords: ['right_hip', 'right_knee', 'right_ankle', 'r_hip', 'r_knee', 'r_ankle', 'right_leg', 'r_leg', 'rleg', 'right_thigh', 'right_shin', 'right_foot', 'r_foot'] },
-            { category: 'Left Leg',   keywords: ['left_hip', 'left_knee', 'left_ankle', 'l_hip', 'l_knee', 'l_ankle', 'left_leg', 'l_leg', 'lleg', 'left_thigh', 'left_shin', 'left_foot', 'l_foot'] },
-            { category: 'Neck',       keywords: ['neck', 'head'] },
-            { category: 'Waist',      keywords: ['waist', 'torso', 'trunk', 'chest', 'spine', 'back'] },
-            { category: 'Base',       keywords: ['base', 'pelvis', 'hip_link', 'root', 'body'] }
-        ];
-
-        for (const { category, keywords } of patterns) {
-            for (const kw of keywords) {
-                if (text.includes(kw)) return category;
-            }
-        }
-
-        if (text.match(/\bright\b/) || text.match(/_r_/) || text.match(/_r$/)) {
-            if (text.match(/shoulder|elbow|wrist|arm/)) return 'Right Arm';
-            if (text.match(/hip|knee|ankle|leg|foot|thigh/)) return 'Right Leg';
-            if (text.match(/hand|finger|gripper/)) return 'Right Hand';
-        }
-        if (text.match(/\bleft\b/) || text.match(/_l_/) || text.match(/_l$/)) {
-            if (text.match(/shoulder|elbow|wrist|arm/)) return 'Left Arm';
-            if (text.match(/hip|knee|ankle|leg|foot|thigh/)) return 'Left Leg';
-            if (text.match(/hand|finger|gripper/)) return 'Left Hand';
-        }
-
-        return 'Other';
-    }
-
-    // ==================== Limb Chain Detection ====================
-
-    computeLimbsData(model) {
-        if (this._limbsCache) return this._limbsCache;
-        if (!model.joints || !model.links) return [];
-
-        const childrenMap = new Map();
-        const parentMap = new Map();
-
+        let parentJoint = null;
         model.joints.forEach(joint => {
-            if (joint.parent && joint.child) {
-                if (!childrenMap.has(joint.parent)) childrenMap.set(joint.parent, []);
-                childrenMap.get(joint.parent).push({ joint: joint.name, child: joint.child });
-                parentMap.set(joint.child, { parent: joint.parent, joint: joint.name });
-            }
+            if (joint.child === linkName) parentJoint = joint;
         });
 
-        const branchPoints = new Set();
-        childrenMap.forEach((children, parent) => {
-            if (children.length > 1) branchPoints.add(parent);
-        });
+        if (parentJoint?.origin?.xyz) {
+            const [x, y, z] = parentJoint.origin.xyz;
+            const offset = Math.sqrt(x * x + y * y + z * z);
+            if (offset > 1e-9) return offset * 1000;
+        }
 
-        const leafLinks = new Set();
-        model.links.forEach((link, name) => {
-            if (!childrenMap.has(name) || childrenMap.get(name).length === 0) {
-                leafLinks.add(name);
-            }
-        });
+        const link = model.links.get(linkName);
+        const parentLink = parentJoint?.parent ? model.links.get(parentJoint.parent) : null;
+        if (link?.threeObject && parentLink?.threeObject) {
+            const posA = new THREE.Vector3();
+            const posB = new THREE.Vector3();
+            parentLink.threeObject.updateMatrixWorld(true);
+            link.threeObject.updateMatrixWorld(true);
+            parentLink.threeObject.getWorldPosition(posA);
+            link.threeObject.getWorldPosition(posB);
+            return posA.distanceTo(posB) * 1000;
+        }
 
-        const limbs = [];
-        const linkToLimbMap = new Map();
-
-        leafLinks.forEach(leaf => {
-            const chain = [];
-            const jointNames = [];
-            let current = leaf;
-
-            while (current) {
-                if (!parentMap.has(current)) {
-                    chain.unshift(current);
-                    break;
-                }
-                const { parent, joint } = parentMap.get(current);
-                chain.unshift(current);
-                jointNames.unshift(joint);
-
-                if (branchPoints.has(parent)) {
-                    chain.unshift(parent);
-                    break;
-                }
-                current = parent;
-            }
-
-            if (chain.length < 2) return;
-
-            const category = this.classifyLimbCategory(chain, jointNames);
-
-            let totalMass = 0;
-            chain.forEach(linkName => {
-                const link = model.links.get(linkName);
-                if (link && link.inertial) totalMass += link.inertial.mass;
-            });
-
-            const firstLink = model.links.get(chain[0]);
-            const lastLink = model.links.get(chain[chain.length - 1]);
-            let dx = 0, dy = 0, dz = 0, dist = 0;
-
-            if (firstLink?.threeObject && lastLink?.threeObject) {
-                const posA = new THREE.Vector3();
-                const posB = new THREE.Vector3();
-                firstLink.threeObject.updateMatrixWorld(true);
-                lastLink.threeObject.updateMatrixWorld(true);
-                firstLink.threeObject.getWorldPosition(posA);
-                lastLink.threeObject.getWorldPosition(posB);
-                dx = posB.x - posA.x;
-                dy = posB.y - posA.y;
-                dz = posB.z - posA.z;
-                dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            }
-
-            const limbName = `${chain[0]} → ${chain[chain.length - 1]}`;
-            const limbEntry = {
-                category,
-                name: limbName,
-                linkCount: chain.length,
-                jointCount: jointNames.length,
-                mass: totalMass,
-                dx: dx * 1000,
-                dy: dy * 1000,
-                dz: dz * 1000,
-                dist: dist * 1000,
-                chainLinks: chain
-            };
-            limbs.push(limbEntry);
-
-            chain.forEach(linkName => {
-                linkToLimbMap.set(linkName, category);
-            });
-        });
-
-        this._limbsCache = limbs;
-        this._linkToLimbMap = linkToLimbMap;
-        return limbs;
+        return null;
     }
 
-    getLinkToLimbMap() {
-        if (!this._linkToLimbMap) this.computeLimbsData(this.currentModel);
-        return this._linkToLimbMap || new Map();
+    formatLinkLength(lengthMm) {
+        if (lengthMm === null || Number.isNaN(lengthMm)) return '—';
+        const formatted = formatLinearFromMeters(lengthMm / 1000, this.measureUnits.linear);
+        return formatted ?? '—';
+    }
+
+    /** Format a length in meters with the current linear unit (Overview, Distance, etc.). */
+    formatLinearDisplay(meters) {
+        if (meters === null || meters === undefined || Number.isNaN(meters)) return '—';
+        const formatted = formatLinearFromMeters(meters, this.measureUnits.linear);
+        if (formatted == null) return '—';
+        return `${formatted} ${linearUnitLabel(this.measureUnits.linear)}`;
+    }
+
+    /**
+     * Joint limits: revolute/continuous use angle unit; prismatic uses linear unit.
+     * @param {number} valueRadOrM - URDF lower/upper (rad or m)
+     */
+    formatLimitValue(joint, valueRadOrM) {
+        const dash = '—';
+        if (valueRadOrM === null || valueRadOrM === undefined || Number.isNaN(valueRadOrM)) return dash;
+        if (joint?.type === 'prismatic') {
+            return formatLinearFromMeters(valueRadOrM, this.measureUnits.linear) ?? dash;
+        }
+        return formatAngleFromRad(valueRadOrM, this.measureUnits.angle) ?? dash;
+    }
+
+    /**
+     * Torque/velocity from URDF limits; effort in Nm, velocity in rad/s.
+     * @param {import('../models/UnifiedRobotModel.js').Joint} joint
+     */
+    getJointLimitFields(joint) {
+        const dash = '—';
+        const empty = {
+            limitMin: dash,
+            limitMax: dash,
+            torque: dash,
+            velocity: dash,
+            limitMinSort: null,
+            limitMaxSort: null,
+            torqueSort: null,
+            velocitySort: null
+        };
+
+        if (!joint || joint.type === 'fixed') return empty;
+
+        const u = this.measureUnits;
+        const torqueVal = joint.limits?.effort;
+        const velVal = joint.limits?.velocity;
+        const torqueFormatted = formatTorqueFromNm(torqueVal, u.torque);
+        const torque = torqueFormatted != null
+            ? `${torqueFormatted} ${torqueUnitLabel(u.torque)}`
+            : dash;
+        const velocityFormatted = formatVelocityFromRadS(velVal, u.velocity);
+        const velocity = velocityFormatted != null ? `${velocityFormatted} ${velocityUnitLabel(u.velocity)}` : dash;
+
+        if (joint.type === 'continuous') {
+            return {
+                limitMin: '−∞',
+                limitMax: '∞',
+                torque,
+                velocity,
+                limitMinSort: null,
+                limitMaxSort: null,
+                torqueSort: torqueVal ?? null,
+                velocitySort: velVal ?? null
+            };
+        }
+
+        const lim = joint.limits;
+        if (!lim || lim.lower === undefined || lim.upper === undefined) {
+            return {
+                ...empty,
+                torque,
+                velocity,
+                torqueSort: torqueVal ?? null,
+                velocitySort: velVal ?? null
+            };
+        }
+
+        return {
+            limitMin: this.formatLimitValue(joint, lim.lower),
+            limitMax: this.formatLimitValue(joint, lim.upper),
+            torque,
+            velocity,
+            limitMinSort: lim.lower,
+            limitMaxSort: lim.upper,
+            torqueSort: torqueVal ?? null,
+            velocitySort: velVal ?? null
+        };
+    }
+
+    enrichJointTableRow(row, model, t) {
+        const joint = model?.joints?.get(row.name);
+        const limitFields = this.getJointLimitFields(joint);
+
+        return {
+            ...row,
+            categoryPlain: this.formatCategoriesPlain(row.categories),
+            jointAxisLabel: this.formatJointAxisLabel(row.jointAxis, t),
+            ...limitFields
+        };
+    }
+
+    getSourceFileBasename(model = this.currentModel) {
+        const raw = model?.sourceFileName || model?.name || 'robot';
+        const base = String(raw).split(/[/\\]/).pop() || 'robot';
+        const withoutExt = base.replace(/\.[^.]+$/, '');
+        return withoutExt || 'robot';
+    }
+
+    sanitizeExportFilenamePart(value) {
+        return String(value)
+            .replace(/[/\\?%*:|"<>]/g, '_')
+            .replace(/\s+/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '') || 'export';
+    }
+
+    buildExportFilename(model, tabLabel) {
+        const filePart = this.sanitizeExportFilenamePart(this.getSourceFileBasename(model));
+        const tabPart = this.sanitizeExportFilenamePart(tabLabel);
+        return `${filePart}_${tabPart}.csv`;
+    }
+
+    escapeCsvCell(value) {
+        const s = String(value ?? '');
+        if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+    }
+
+    tableToCsv(headers, rows) {
+        const lines = [
+            headers.map(h => this.escapeCsvCell(h)).join(','),
+            ...rows.map(row => row.map(cell => this.escapeCsvCell(cell)).join(','))
+        ];
+        return lines.join('\r\n');
+    }
+
+    getLinksTableDataset(model = this.currentModel) {
+        const t = (k) => window.i18n?.t(k) || k;
+        const lin = linearUnitLabel(this.measureUnits.linear);
+        const { linkCategories } = this.getKinematicsAnalysis(model);
+        const headers = [
+            t('measureLinkName'),
+            `${t('mass')} (kg)`,
+            `${t('measureLinkLength')} (${lin})`,
+            t('measureLimbCategory')
+        ];
+        const rows = [];
+
+        if (model?.links) {
+            model.links.forEach((link, name) => {
+                const categories = linkCategories.get(name) || [];
+                const lengthMm = this.computeLinkLengthMm(model, name);
+                rows.push([
+                    name,
+                    formatMeasureDecimal(link.inertial ? link.inertial.mass : 0, 3) ?? '0,000',
+                    this.formatLinkLength(lengthMm),
+                    this.formatCategoriesPlain(categories)
+                ]);
+            });
+        }
+
+        return {
+            headers,
+            rows,
+            filename: this.buildExportFilename(model, t('measureLinks'))
+        };
+    }
+
+    getJointsTableDataset(model = this.currentModel) {
+        const t = (k) => window.i18n?.t(k) || k;
+        const { jointRows } = this.getKinematicsAnalysis(model);
+        const headers = this.getJointTableColumns(t).map(c => c.label);
+        const rows = jointRows.map(row => {
+            const enriched = this.enrichJointTableRow(row, model, t);
+            return [
+                row.name,
+                row.type,
+                enriched.categoryPlain,
+                enriched.jointAxisLabel,
+                enriched.limitMin,
+                enriched.limitMax,
+                enriched.torque,
+                enriched.velocity
+            ];
+        });
+
+        return {
+            headers,
+            rows,
+            filename: this.buildExportFilename(model, t('measureJointIdentification'))
+        };
+    }
+
+    downloadTableCsv(dataset) {
+        const csv = '\uFEFF' + this.tableToCsv(dataset.headers, dataset.rows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = dataset.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async copyTableCsv(dataset) {
+        const t = (k) => window.i18n?.t(k) || k;
+        const csv = this.tableToCsv(dataset.headers, dataset.rows);
+        try {
+            await navigator.clipboard.writeText(csv);
+            this.showMeasureExportToast(t('measureTableCopied'));
+        } catch {
+            this.showMeasureExportToast(t('measureCopyFailed'));
+        }
+    }
+
+    showMeasureExportToast(message) {
+        const existing = document.querySelector('.measure-export-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'measure-export-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('visible'));
+        setTimeout(() => {
+            toast.classList.remove('visible');
+            setTimeout(() => toast.remove(), 200);
+        }, 2000);
+    }
+
+    renderTableExportToolbar(container, dataset) {
+        const t = (k) => window.i18n?.t(k) || k;
+        const toolbar = document.createElement('div');
+        toolbar.className = 'measure-table-toolbar';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'measure-export-btn';
+        copyBtn.textContent = t('measureCopyTable');
+        copyBtn.disabled = dataset.rows.length === 0;
+        copyBtn.addEventListener('click', () => this.copyTableCsv(dataset));
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.type = 'button';
+        downloadBtn.className = 'measure-export-btn primary';
+        downloadBtn.textContent = t('measureDownloadTable');
+        downloadBtn.disabled = dataset.rows.length === 0;
+        downloadBtn.addEventListener('click', () => this.downloadTableCsv(dataset));
+
+        toolbar.appendChild(copyBtn);
+        toolbar.appendChild(downloadBtn);
+        container.appendChild(toolbar);
     }
 
     // ==================== Links Table Tab ====================
@@ -507,15 +746,22 @@ export class MeasurePanelController {
     renderLinksTable(container) {
         const model = this.currentModel;
         const t = (k) => window.i18n?.t(k) || k;
-        const limbMap = this.getLinkToLimbMap();
+        const dataset = this.getLinksTableDataset(model);
+        this.renderTableExportToolbar(container, dataset);
 
+        const { linkCategories } = this.getKinematicsAnalysis(model);
         const rows = [];
         if (model.links) {
             model.links.forEach((link, name) => {
+                const categories = linkCategories.get(name) || [];
+                const lengthMm = this.computeLinkLengthMm(model, name);
                 rows.push({
                     name,
                     mass: link.inertial ? link.inertial.mass : 0,
-                    limb: limbMap.get(name) || '—'
+                    length: lengthMm,
+                    lengthDisplay: this.formatLinkLength(lengthMm),
+                    categories,
+                    categoryPlain: this.formatCategoriesPlain(categories)
                 });
             });
         }
@@ -525,10 +771,12 @@ export class MeasurePanelController {
 
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
+        const lin = linearUnitLabel(this.measureUnits.linear);
         const columns = [
             { key: 'name', label: t('measureLinkName') },
             { key: 'mass', label: `${t('mass')} (kg)` },
-            { key: 'limb', label: t('measureLimbCategory') }
+            { key: 'length', label: `${t('measureLinkLength')} (${lin})` },
+            { key: 'categoryPlain', label: t('measureLimbCategory') }
         ];
 
         columns.forEach(col => {
@@ -554,16 +802,7 @@ export class MeasurePanelController {
 
         let sortedRows = [...rows];
         if (this.sortColumn) {
-            sortedRows.sort((a, b) => {
-                let va = a[this.sortColumn];
-                let vb = b[this.sortColumn];
-                if (typeof va === 'number' && typeof vb === 'number') {
-                    return this.sortAscending ? va - vb : vb - va;
-                }
-                va = String(va || '');
-                vb = String(vb || '');
-                return this.sortAscending ? va.localeCompare(vb) : vb.localeCompare(va);
-            });
+            sortedRows.sort((a, b) => this.compareMeasureRows(a, b, this.sortColumn));
         }
 
         const tbody = document.createElement('tbody');
@@ -572,8 +811,9 @@ export class MeasurePanelController {
             tr.addEventListener('click', () => this.highlightLink(row.name));
             tr.innerHTML = `
                 <td title="${row.name}">${row.name}</td>
-                <td>${row.mass.toFixed(3)}</td>
-                <td>${row.limb}</td>
+                <td>${formatMeasureDecimal(row.mass, 3) ?? '0,000'}</td>
+                <td>${row.lengthDisplay}</td>
+                <td><div class="measure-category-badges">${this.formatCategoryBadges(row.categories)}</div></td>
             `;
             tbody.appendChild(tr);
         });
@@ -585,16 +825,21 @@ export class MeasurePanelController {
         container.appendChild(wrapper);
     }
 
-    // ==================== Limbs Table Tab ====================
+    // ==================== Joint Identification Tab ====================
 
-    renderLimbsTable(container) {
+    renderJointsTable(container) {
         const model = this.currentModel;
         const t = (k) => window.i18n?.t(k) || k;
+        const dataset = this.getJointsTableDataset(model);
+        this.renderTableExportToolbar(container, dataset);
 
-        const limbs = this.computeLimbsData(model);
+        const { jointRows } = this.getKinematicsAnalysis(model);
 
-        if (limbs.length === 0) {
-            container.innerHTML = `<div class="empty-state">${t('measureNoLimbs')}</div>`;
+        if (jointRows.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = t('measureNoJoints');
+            container.appendChild(empty);
             return;
         }
 
@@ -603,29 +848,23 @@ export class MeasurePanelController {
 
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        const columns = [
-            { key: 'category', label: t('measureLimbCategory') },
-            { key: 'name', label: t('measureLimbName') },
-            { key: 'linkCount', label: t('measureLimbLinks') },
-            { key: 'jointCount', label: t('measureLimbJoints') },
-            { key: 'mass', label: `${t('mass')} (kg)` },
-            { key: 'dist', label: `${t('measureLimbLength')} (mm)` }
-        ];
+        const columns = this.getJointTableColumns(t);
 
         columns.forEach(col => {
             const th = document.createElement('th');
             th.textContent = col.label;
             th.className = 'measure-th-sortable';
+            const sortKey = col.sortKey || col.key;
             th.addEventListener('click', () => {
-                if (this.sortColumn === col.key) {
+                if (this.sortColumn === sortKey) {
                     this.sortAscending = !this.sortAscending;
                 } else {
-                    this.sortColumn = col.key;
+                    this.sortColumn = sortKey;
                     this.sortAscending = true;
                 }
                 this.render();
             });
-            if (this.sortColumn === col.key) {
+            if (this.sortColumn === sortKey) {
                 th.textContent += this.sortAscending ? ' ▲' : ' ▼';
             }
             headerRow.appendChild(th);
@@ -633,51 +872,31 @@ export class MeasurePanelController {
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
-        let sortedLimbs = [...limbs];
+        const rows = jointRows.map(row => this.enrichJointTableRow(row, model, t));
+
+        let sortedRows = [...rows];
         if (this.sortColumn) {
-            sortedLimbs.sort((a, b) => {
-                let va = a[this.sortColumn];
-                let vb = b[this.sortColumn];
-                if (typeof va === 'number' && typeof vb === 'number') {
-                    return this.sortAscending ? va - vb : vb - va;
-                }
-                va = String(va || '');
-                vb = String(vb || '');
-                return this.sortAscending ? va.localeCompare(vb) : vb.localeCompare(va);
-            });
+            sortedRows.sort((a, b) => this.compareMeasureRows(a, b, this.sortColumn));
         }
 
         const tbody = document.createElement('tbody');
-        sortedLimbs.forEach(limb => {
+        sortedRows.forEach(row => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><span class="measure-category-badge">${limb.category}</span></td>
-                <td title="${limb.name}">${limb.name}</td>
-                <td>${limb.linkCount}</td>
-                <td>${limb.jointCount}</td>
-                <td>${limb.mass.toFixed(3)}</td>
-                <td>${limb.dist.toFixed(1)}</td>
-            `;
-
-            const detailRow = document.createElement('tr');
-            detailRow.className = 'measure-limb-detail-row';
-            detailRow.innerHTML = `
-                <td colspan="6" class="measure-limb-detail">
-                    ΔX: ${limb.dx.toFixed(1)} mm &nbsp;
-                    ΔY: ${limb.dy.toFixed(1)} mm &nbsp;
-                    ΔZ: ${limb.dz.toFixed(1)} mm &nbsp;
-                    ‖d‖: ${limb.dist.toFixed(1)} mm
-                </td>
-            `;
-            detailRow.style.display = 'none';
-
             tr.style.cursor = 'pointer';
+            tr.innerHTML = `
+                <td title="${row.name}">${row.name}</td>
+                <td>${row.type}</td>
+                <td><div class="measure-category-badges">${this.formatCategoryBadges(row.categories)}</div></td>
+                <td><span class="measure-axis-badge">${row.jointAxisLabel}</span></td>
+                <td>${row.limitMin}</td>
+                <td>${row.limitMax}</td>
+                <td>${row.torque}</td>
+                <td>${row.velocity}</td>
+            `;
             tr.addEventListener('click', () => {
-                detailRow.style.display = detailRow.style.display === 'none' ? '' : 'none';
+                if (row.child) this.highlightLink(row.child);
             });
-
             tbody.appendChild(tr);
-            tbody.appendChild(detailRow);
         });
         table.appendChild(tbody);
 
@@ -753,6 +972,7 @@ export class MeasurePanelController {
             });
         }
 
+        // Keep numeric result when user switches unit preset (re-render only)
         if (this.distanceSelection.first && this.distanceSelection.second && this.distanceLine) {
             this.showDistanceResult(container);
         }
@@ -760,6 +980,7 @@ export class MeasurePanelController {
 
     // ==================== Distance Measurement Logic ====================
 
+    /** Joint frame origin in world space (meters). */
     getJointWorldPosition(jointName) {
         const model = this.currentModel;
         if (!model || !model.joints) return null;
@@ -798,6 +1019,7 @@ export class MeasurePanelController {
         this.distanceLine.renderOrder = 999;
         this.sceneManager.scene.add(this.distanceLine);
 
+        // Orthogonal path A → B for ΔX / ΔY / ΔZ (same values as shown in the panel)
         const axisPoints = [
             { points: [posA, new THREE.Vector3(posB.x, posA.y, posA.z)], color: 0xff4444 },
             { points: [new THREE.Vector3(posB.x, posA.y, posA.z), new THREE.Vector3(posB.x, posB.y, posA.z)], color: 0x44ff44 },
@@ -852,21 +1074,22 @@ export class MeasurePanelController {
         const dy = posB.y - posA.y;
         const dz = posB.z - posA.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const fmt = (m) => this.formatLinearDisplay(m); // dx, dy, dz, dist in meters
 
         const resultDiv = (parentContainer || document).querySelector('#measure-distance-result')
             || document.getElementById('measure-distance-result');
         if (resultDiv) {
             resultDiv.innerHTML = `
                 <div class="measure-distance-value">
-                    <strong>${t('measureTotalDistance')}:</strong> ${(dist * 1000).toFixed(1)} mm
+                    <strong>${t('measureTotalDistance')}:</strong> ${fmt(dist)}
                 </div>
                 <div class="measure-stat-grid">
                     <span class="measure-dim-label" style="color:#ff4444">ΔX:</span>
-                    <span class="measure-dim-value">${(dx * 1000).toFixed(1)} mm</span>
+                    <span class="measure-dim-value">${fmt(dx)}</span>
                     <span class="measure-dim-label" style="color:#44ff44">ΔY:</span>
-                    <span class="measure-dim-value">${(dy * 1000).toFixed(1)} mm</span>
+                    <span class="measure-dim-value">${fmt(dy)}</span>
                     <span class="measure-dim-label" style="color:#4488ff">ΔZ:</span>
-                    <span class="measure-dim-value">${(dz * 1000).toFixed(1)} mm</span>
+                    <span class="measure-dim-value">${fmt(dz)}</span>
                 </div>
             `;
         }

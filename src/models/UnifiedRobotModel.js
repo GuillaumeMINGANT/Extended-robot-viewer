@@ -11,6 +11,8 @@ export class UnifiedRobotModel {
         this.constraints = new Map(); // Map<name, Constraint> - for parallel mechanism constraints
         this.rootLink = null; // Root link name
         this.threeObject = null; // Three.js object (if available)
+        /** Basename of the loaded description file (e.g. "my_robot" from my_robot.urdf) */
+        this.sourceFileName = null;
     }
 
     addLink(link) {

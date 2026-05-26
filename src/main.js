@@ -16,6 +16,7 @@ import { MeasurementController } from './controllers/MeasurementController.js';
 import { USDViewerManager } from './renderer/USDViewerManager.js';
 import { MujocoSimulationManager } from './renderer/MujocoSimulationManager.js';
 import { MeasurePanelController } from './controllers/MeasurePanelController.js';
+import { MeasureUnitsStatusBar } from './ui/MeasureUnitsStatusBar.js';
 import { i18n } from './utils/i18n.js';
 
 // Expose d3 globally for PanelManager
@@ -37,6 +38,7 @@ class App {
         this.codeEditorManager = null;
         this.measurementController = null;
         this.measurePanelController = null;
+        this.measureUnitsStatusBar = null;
         this.usdViewerManager = null;
         this.mujocoSimulationManager = null;
         this.currentModel = null;
@@ -252,8 +254,11 @@ class App {
             // Initialize measurement controller
             this.measurementController = new MeasurementController(this.sceneManager);
 
-            // Initialize measure panel controller
+            // Measure panel (floating) + bottom-right unit system picker (SolidWorks-style)
             this.measurePanelController = new MeasurePanelController(this.sceneManager);
+            this.measureUnitsStatusBar = new MeasureUnitsStatusBar();
+            this.measureUnitsStatusBar.mount();
+            this.measureUnitsStatusBar.bind(this.measurePanelController);
 
             // Associate measurement controller with model graph view
             if (this.modelGraphView) {

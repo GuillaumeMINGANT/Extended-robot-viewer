@@ -1,50 +1,123 @@
 import * as THREE from 'three';
 import { MathUtils } from '../utils/MathUtils.js';
+import { CoordinateAxesManager } from './CoordinateAxesManager.js';
 
 /**
- * InertialVisualization - Handles center of mass and inertia visualization
+ * Center-of-mass and inertia helpers for the 3D viewer.
+ *
+ * COM markers use a Blender-style checkerboard sphere (eight sphere octants).
+ * Size is uniform for every link on a given robot: it scales with overall model
+ * height (same basis as link axes), not with each link's bounding box.
  */
 export class InertialVisualization {
     constructor(sceneManager) {
         this.sceneManager = sceneManager;
+        /** @type {THREE.Group[]} Per-link COM marker groups */
         this.comMarkers = [];
+        /** @type {THREE.Mesh[]} Inertia box meshes (Gazebo-style) */
         this.inertiaEllipsoids = [];
         this.showCOM = false;
         this.showInertia = false;
+        /** Max bbox dimension of the loaded robot (meters), used for uniform COM size */
+        this.modelScale = 1;
     }
 
     /**
-     * Static method: Create COM marker geometry (Blender-style black-and-white sphere)
-     * @param {number} radius - Radius of COM marker
-     * @returns {THREE.Group} COM marker group
+     * Store overall robot span after {@link CoordinateAxesManager.measureObjectScale}.
+     * @param {number} modelScale
      */
-    static createCOMGeometry(radius) {
+    setModelScale(modelScale) {
+        this.modelScale = Math.max(modelScale, 1e-6);
+    }
+
+    /**
+     * Re-measure robot span from the loaded scene graph.
+     * Call after async meshes finish loading so COM size matches the final model.
+     * @param {object} model - Unified robot model with threeObject
+     * @returns {number} Updated modelScale
+     */
+    updateModelScaleFromObject(model) {
+        if (!model?.threeObject) return this.modelScale;
+        const root = model.threeObject;
+        if (this.sceneManager?.world?.children?.includes(root)) {
+            this.sceneManager.world.updateMatrixWorld(true);
+        }
+        root.updateMatrixWorld(true);
+        this.setModelScale(CoordinateAxesManager.measureObjectScale(root, this.modelScale));
+        return this.modelScale;
+    }
+
+    /**
+     * Uniform COM sphere radius for all links on one robot.
+     * Derived from model-span axis length (~8.75% of height) × 0.15.
+     * @param {number} modelScale - Max dimension of the full robot bbox
+     * @returns {number} Radius in scene units (meters)
+     */
+    static computeCOMRadius(modelScale = 1) {
+        const model = Math.max(modelScale, 1e-6);
+        const axisLen = CoordinateAxesManager.computeLinkAxesLength(model, model);
+        return axisLen * 0.15;
+    }
+
+    /**
+     * Radius for the Measure panel overall-COM overlay (blue/white, slightly larger).
+     * @param {number} modelScale
+     * @returns {number}
+     */
+    static computeGlobalCOMRadius(modelScale = 1) {
+        return InertialVisualization.computeCOMRadius(modelScale) * 1.4;
+    }
+
+    /**
+     * Keep COM markers fully opaque (not affected by robot transparency pass).
+     * @param {THREE.Material} material
+     */
+    static applyCOMMaterial(material) {
+        material.transparent = false;
+        material.opacity = 1;
+        material.toneMapped = false;
+        material.depthTest = true;
+        material.depthWrite = true;
+        material.needsUpdate = true;
+    }
+
+    /**
+     * Create a Blender-style checkerboard sphere (eight quarter-sphere octants).
+     * @param {number} radius - Sphere radius in scene units
+     * @param {{ lightColor?: number, darkColor?: number }} [options]
+     * @param {number} [options.lightColor=0xffffff] - Bright octant color (toolbar: white)
+     * @param {number} [options.darkColor=0x000000] - Dark octant color (toolbar: black; Measure: blue)
+     * @returns {THREE.Group}
+     */
+    static createCOMGeometry(radius, { lightColor = 0xffffff, darkColor = 0x000000 } = {}) {
         const comGroup = new THREE.Group();
+        comGroup.userData.isCenterOfMass = true;
+        comGroup.userData.isCOMMarker = true;
+        comGroup.renderOrder = 100;
         const segments = 16;
 
-        const comMaterialWhite = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            side: THREE.DoubleSide,
-            depthTest: true,
-            depthWrite: true
+        // Material configuration: fully opaque, proper depth testing
+        const matLight = new THREE.MeshBasicMaterial({
+            color: lightColor,
+            side: THREE.DoubleSide
         });
-        const comMaterialBlack = new THREE.MeshBasicMaterial({
-            color: 0x000000,
-            side: THREE.DoubleSide,
-            depthTest: true,
-            depthWrite: true
+        const matDark = new THREE.MeshBasicMaterial({
+            color: darkColor,
+            side: THREE.DoubleSide
         });
+        InertialVisualization.applyCOMMaterial(matLight);
+        InertialVisualization.applyCOMMaterial(matDark);
 
-        // Create 8 quarter spheres with alternating black and white
+        // Eight quarter spheres with alternating colors (checkerboard)
         const sphereParts = [
-            { phiStart: 0, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: comMaterialWhite },
-            { phiStart: 0, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: comMaterialBlack },
-            { phiStart: Math.PI/2, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: comMaterialBlack },
-            { phiStart: Math.PI/2, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: comMaterialWhite },
-            { phiStart: Math.PI, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: comMaterialWhite },
-            { phiStart: Math.PI, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: comMaterialBlack },
-            { phiStart: Math.PI*1.5, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: comMaterialBlack },
-            { phiStart: Math.PI*1.5, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: comMaterialWhite }
+            { phiStart: 0, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: matLight },
+            { phiStart: 0, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: matDark },
+            { phiStart: Math.PI/2, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: matDark },
+            { phiStart: Math.PI/2, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: matLight },
+            { phiStart: Math.PI, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: matLight },
+            { phiStart: Math.PI, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: matDark },
+            { phiStart: Math.PI*1.5, phiLength: Math.PI/2, thetaStart: 0, thetaLength: Math.PI/2, material: matDark },
+            { phiStart: Math.PI*1.5, phiLength: Math.PI/2, thetaStart: Math.PI/2, thetaLength: Math.PI/2, material: matLight }
         ];
 
         sphereParts.forEach(part => {
@@ -54,8 +127,11 @@ export class InertialVisualization {
                 part.thetaStart, part.thetaLength
             );
             const mesh = new THREE.Mesh(geometry, part.material);
+            mesh.userData.isCenterOfMass = true;
+            mesh.userData.isCOMMarker = true;
             mesh.castShadow = false;
             mesh.receiveShadow = false;
+            mesh.renderOrder = 100;
             // Allow raycasting so COM can be selected for dragging
             comGroup.add(mesh);
         });
@@ -64,10 +140,14 @@ export class InertialVisualization {
     }
 
     /**
-     * Extract and visualize inertial properties from model
+     * Extract inertial data from the model and rebuild COM / inertia helpers when enabled.
+     * Refreshes modelScale first so marker size matches the loaded robot height.
+     * @param {object} model - Unified robot model
      */
     extractInertialProperties(model) {
-        // Clean up: remove from parent objects
+        this.updateModelScaleFromObject(model);
+
+        // Clean up: remove from parent link objects
         this.comMarkers.forEach(marker => {
             if (marker.parent) {
                 marker.parent.remove(marker);
@@ -123,7 +203,10 @@ export class InertialVisualization {
     }
 
     /**
-     * Create Blender-style quarter black-and-white sphere COM marker
+     * Attach one COM marker to a link (black/white checkerboard, uniform radius per robot).
+     * @param {object} model
+     * @param {object} link
+     * @param {THREE.Vector3} position - COM in link-local coordinates (URDF inertial origin)
      */
     createCOMMarker(model, link, position) {
         const linkObject = this.findLinkObject(model.threeObject, link.name);
@@ -131,101 +214,9 @@ export class InertialVisualization {
             return;
         }
 
-        // Create Blender-style quarter black-white sphere
-        const comGroup = new THREE.Group();
-        const radius = 0.02;
-        const segments = 16;
-
-        // Material configuration: fully opaque, proper depth testing (occluded when inside model)
-        const comMaterialWhite = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            side: THREE.DoubleSide,
-            depthTest: true,
-            depthWrite: true
-        });
-        const comMaterialBlack = new THREE.MeshBasicMaterial({
-            color: 0x000000,
-            side: THREE.DoubleSide,
-            depthTest: true,
-            depthWrite: true
-        });
-
-        // Create 8 quarter spheres with alternating black and white
-        // Front top: white (0° - 90° horizontal, 0° - 90° vertical)
-        const frontTopGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            0, Math.PI / 2,
-            0, Math.PI / 2
-        );
-        const frontTopMesh = new THREE.Mesh(frontTopGeo, comMaterialWhite);
-
-        // Front bottom: black
-        const frontBottomGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            0, Math.PI / 2,
-            Math.PI / 2, Math.PI / 2
-        );
-        const frontBottomMesh = new THREE.Mesh(frontBottomGeo, comMaterialBlack);
-
-        // Back top: black
-        const backTopGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            Math.PI / 2, Math.PI / 2,
-            0, Math.PI / 2
-        );
-        const backTopMesh = new THREE.Mesh(backTopGeo, comMaterialBlack);
-
-        // Back bottom: white
-        const backBottomGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            Math.PI / 2, Math.PI / 2,
-            Math.PI / 2, Math.PI / 2
-        );
-        const backBottomMesh = new THREE.Mesh(backBottomGeo, comMaterialWhite);
-
-        // Left top: white
-        const leftTopGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            Math.PI, Math.PI / 2,
-            0, Math.PI / 2
-        );
-        const leftTopMesh = new THREE.Mesh(leftTopGeo, comMaterialWhite);
-
-        // Left bottom: black
-        const leftBottomGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            Math.PI, Math.PI / 2,
-            Math.PI / 2, Math.PI / 2
-        );
-        const leftBottomMesh = new THREE.Mesh(leftBottomGeo, comMaterialBlack);
-
-        // Right top: black
-        const rightTopGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            Math.PI * 1.5, Math.PI / 2,
-            0, Math.PI / 2
-        );
-        const rightTopMesh = new THREE.Mesh(rightTopGeo, comMaterialBlack);
-
-        // Right bottom: white
-        const rightBottomGeo = new THREE.SphereGeometry(
-            radius, segments, segments,
-            Math.PI * 1.5, Math.PI / 2,
-            Math.PI / 2, Math.PI / 2
-        );
-        const rightBottomMesh = new THREE.Mesh(rightBottomGeo, comMaterialWhite);
-
-        comGroup.add(frontTopMesh);
-        comGroup.add(frontBottomMesh);
-        comGroup.add(backTopMesh);
-        comGroup.add(backBottomMesh);
-        comGroup.add(leftTopMesh);
-        comGroup.add(leftBottomMesh);
-        comGroup.add(rightTopMesh);
-        comGroup.add(rightBottomMesh);
-
-        // Mark this as center of mass
-        comGroup.userData.isCenterOfMass = true;
+        // Same radius on every link for this robot (scales with model height, not link bbox)
+        const radius = InertialVisualization.computeCOMRadius(this.modelScale);
+        const comGroup = InertialVisualization.createCOMGeometry(radius);
 
         comGroup.position.copy(position);
         comGroup.visible = this.showCOM;
@@ -341,7 +332,10 @@ export class InertialVisualization {
     }
 
     /**
-     * Find link object in scene graph
+     * Find a link's Three.js object in the URDF/MJCF scene graph.
+     * @param {THREE.Object3D} root - Model root (model.threeObject)
+     * @param {string} linkName
+     * @returns {THREE.Object3D|null}
      */
     findLinkObject(root, linkName) {
         let found = null;
@@ -354,33 +348,33 @@ export class InertialVisualization {
     }
 
     /**
-     * Toggle COM display
+     * Toggle per-link COM markers. Rebuilds geometry when turned on (current model scale).
+     * @param {boolean} show
+     * @param {object|null} currentModel
      */
     toggleCenterOfMass(show, currentModel) {
         this.showCOM = show;
 
-        if (show && this.comMarkers.length === 0 && currentModel) {
-            // If enabling and not yet created, need to recreate
+        if (show && currentModel) {
             this.extractInertialProperties(currentModel);
         } else {
-            // Otherwise just toggle visibility
             this.comMarkers.forEach(marker => {
-                marker.visible = show;
+                marker.visible = false;
             });
         }
     }
 
     /**
-     * Toggle inertia display
+     * Toggle inertia box display.
+     * @param {boolean} show
+     * @param {object|null} currentModel
      */
     toggleInertia(show, currentModel) {
         this.showInertia = show;
 
-        if (show && this.inertiaEllipsoids.length === 0 && currentModel) {
-            // If enabling and not yet created, need to recreate
+        if (show && currentModel) {
             this.extractInertialProperties(currentModel);
         } else {
-            // Otherwise just toggle visibility
             this.inertiaEllipsoids.forEach(ellipsoid => {
                 ellipsoid.visible = show;
             });
@@ -388,7 +382,7 @@ export class InertialVisualization {
     }
 
     /**
-     * Clear all inertial visualizations
+     * Remove all COM and inertia helpers from the scene.
      */
     clear() {
         this.comMarkers.forEach(marker => {

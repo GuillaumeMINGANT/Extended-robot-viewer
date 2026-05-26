@@ -4,6 +4,7 @@
  * and joint-to-joint distance measurement with 3D visualization.
  */
 import * as THREE from 'three';
+import { CoordinateAxesManager } from '../renderer/CoordinateAxesManager.js';
 import { InertialVisualization } from '../renderer/InertialVisualization.js';
 
 export class MeasurePanelController {
@@ -229,9 +230,23 @@ export class MeasurePanelController {
 
     // ==================== Overview 3D Overlays ====================
 
+    /**
+     * Show overall center of mass in the scene (blue/white checkerboard, larger than per-link COM).
+     */
     addGlobalCOMMarker(comPos) {
         this.removeGlobalCOMMarker();
-        const marker = InertialVisualization.createCOMGeometry(0.03);
+        const model = this.currentModel;
+        const iv = this.sceneManager?.inertialVisualization;
+        if (iv && model) {
+            iv.updateModelScaleFromObject(model);
+        }
+        const modelScale = iv?.modelScale ?? 1;
+        const radius = InertialVisualization.computeGlobalCOMRadius(modelScale);
+        const marker = InertialVisualization.createCOMGeometry(radius, {
+            lightColor: 0xffffff,
+            darkColor: 0x3b82f6 // Distinct from toolbar COM (black/white)
+        });
+        marker.userData.isGlobalCOM = true;
         marker.position.copy(comPos);
         marker.name = 'measureGlobalCOM';
         marker.renderOrder = 998;
@@ -254,20 +269,15 @@ export class MeasurePanelController {
     }
 
     _setModelTransparency(transparent) {
-        const vm = this.sceneManager?.visualizationManager;
-        if (!vm) return;
-        const isSingleMesh = !this.currentModel?.joints || this.currentModel.joints.size === 0;
-        if (isSingleMesh) return;
-        vm.visualMeshes.forEach((mesh, i) => {
-            const { setMeshTransparency } = vm.constructor;
-            if (setMeshTransparency) setMeshTransparency(mesh, transparent, i);
-        });
+        this.sceneManager?.setTransparencyEnabled(!!transparent);
     }
 
     _isOtherTransparencyActive() {
         const iv = this.sceneManager?.inertialVisualization;
         const am = this.sceneManager?.axesManager;
-        return (iv?.showCOM) || (am?.showAxesEnabled) || (am?.showJointAxesEnabled);
+        const vm = this.sceneManager?.visualizationManager;
+        return (iv?.showCOM) || (am?.showAxesEnabled) || (am?.showJointAxesEnabled) ||
+            (vm?.transparencyEnabled);
     }
 
     addBBoxHelper() {

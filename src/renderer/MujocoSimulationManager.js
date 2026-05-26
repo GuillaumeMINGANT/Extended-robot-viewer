@@ -939,12 +939,18 @@ export class MujocoSimulationManager {
         const showCOM = document.getElementById('show-com')?.classList.contains('active');
         const showInertia = document.getElementById('show-inertia')?.classList.contains('active');
 
+        const modelScale = CoordinateAxesManager.measureObjectScale(this.mujocoRoot, 1);
+
         // Create visualization elements for each body
         for (let b = 0; b < model.nbody; b++) {
             if (!this.bodies[b]) continue;
 
+            const bodySize = CoordinateAxesManager.measureObjectScale(this.bodies[b], modelScale);
+            const axesLength = CoordinateAxesManager.computeLinkAxesLength(bodySize, modelScale);
+
             // 1. Coordinate axes - use CoordinateAxesManager.createAxesGeometry
-            const axesGroup = CoordinateAxesManager.createAxesGeometry(0.1);
+            const axesGroup = CoordinateAxesManager.createAxesGeometry(axesLength);
+            axesGroup.userData.axesSize = axesLength;
             axesGroup.userData.isVisualization = true;
             axesGroup.userData.type = 'axes';
             axesGroup.visible = showAxes;
@@ -961,7 +967,8 @@ export class MujocoSimulationManager {
             const mass = model.body_mass[b];
             if (mass > 0) {
                 // 2. COM marker - use InertialVisualization.createCOMGeometry
-                const comMarker = InertialVisualization.createCOMGeometry(0.02);
+                    const comRadius = InertialVisualization.computeCOMRadius(modelScale);
+                    const comMarker = InertialVisualization.createCOMGeometry(comRadius);
                 comMarker.userData.isVisualization = true;
                 comMarker.userData.type = 'com';
                 comMarker.visible = showCOM;
@@ -1028,7 +1035,12 @@ export class MujocoSimulationManager {
                 if (axis.length() > 0.001) {
                     axis.normalize();
 
-                    const jointAxis = CoordinateAxesManager.createJointArrowGeometry(axis);
+                    const bodySize = CoordinateAxesManager.measureObjectScale(
+                        this.bodies[bodyId],
+                        modelScale
+                    );
+                    const axisLength = CoordinateAxesManager.computeLinkAxesLength(bodySize, modelScale);
+                    const jointAxis = CoordinateAxesManager.createJointArrowGeometry(axis, axisLength);
                     jointAxis.userData.isVisualization = true;
                     jointAxis.userData.type = 'jointAxis';
                     jointAxis.visible = showJointAxes;
@@ -1471,33 +1483,30 @@ export class MujocoSimulationManager {
     }
 
     /**
-     * Update visual model transparency
-     * Use VisualizationManager.setMeshTransparency static method
+     * Apply transparency from VisualizationManager state (shared with URDF viewer).
      */
-    updateVisualTransparency() {
-        if (!this.mujocoRoot) return;
+    applyTransparencyState() {
+        if (!this.mujocoRoot || !this.model) return;
 
-        // Check if any visualization features are enabled (excluding inertia)
-        const showCOM = document.getElementById('show-com')?.classList.contains('active');
-        const showAxes = document.getElementById('toggle-axes-btn')?.getAttribute('data-checked') === 'true';
-        const showJointAxes = document.getElementById('toggle-joint-axes-btn')?.getAttribute('data-checked') === 'true';
+        const shouldBeTransparent = this.sceneManager?.visualizationManager?.transparencyEnabled ?? false;
 
-        const shouldBeTransparent = showCOM || showAxes || showJointAxes;
-
-        // Traverse all body visual meshes, use VisualizationManager static method
         for (let b = 0; b < this.model.nbody; b++) {
             const bodyGroup = this.bodies[b];
             if (!bodyGroup) continue;
 
-            bodyGroup.children.forEach(mesh => {
-                // Only process visual meshes (excluding visualization helper elements and collision geoms)
-                if (mesh.isMesh && !mesh.userData.isVisualization && !mesh.userData.isCollisionGeom) {
-                    VisualizationManager.setMeshTransparency(mesh, shouldBeTransparent);
+            bodyGroup.traverse((obj) => {
+                if (obj.isMesh && !obj.userData.isVisualization && !obj.userData.isCollisionGeom) {
+                    VisualizationManager.setMeshTransparency(obj, shouldBeTransparent);
                 }
             });
         }
 
-        this.sceneManager.redraw();
+        this.sceneManager?.redraw();
+    }
+
+    /** @deprecated Use sceneManager.updateVisualTransparency() */
+    updateVisualTransparency() {
+        this.sceneManager?.updateVisualTransparency();
     }
 
     /**

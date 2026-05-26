@@ -105,6 +105,18 @@ export class HighlightManager {
                 }
             }
 
+            // Skip COM / inertia helper subtrees
+            if (obj.userData?.isCenterOfMass || obj.userData?.isCOMMarker || obj.userData?.isInertiaBox) {
+                return;
+            }
+            let parent = obj.parent;
+            while (parent) {
+                if (parent.userData?.isCenterOfMass || parent.userData?.isCOMMarker) {
+                    return;
+                }
+                parent = parent.parent;
+            }
+
             // Process mesh
             if (obj.type === 'Mesh' || obj.isMesh) {
                 // Skip collision mesh (collision is highlighted separately)
@@ -120,7 +132,6 @@ export class HighlightManager {
                 // Check if this is a special visualization object
                 const isInertia = obj.userData?.isInertiaBox;
                 const isCollision = obj.userData?.isCollision || obj.userData?.isCollisionGeom;
-                const isCOM = obj.userData?.isCenterOfMass || (obj.parent && obj.parent.userData?.isCenterOfMass);
 
                 if (isInertia || isCollision) {
                     // For inertia and collision, keep original color but increase opacity slightly
@@ -138,22 +149,6 @@ export class HighlightManager {
                             polygonOffsetFactor: originalMat.polygonOffsetFactor,
                             polygonOffsetUnits: originalMat.polygonOffsetUnits,
                         });
-                    }
-                } else if (isCOM) {
-                    // For COM, keep original color but add emissive glow
-                    const originalMat = obj.__origMaterial;
-                    if (originalMat.isMeshBasicMaterial) {
-                        obj.material = new THREE.MeshBasicMaterial({
-                            color: originalMat.color.clone(),
-                            side: originalMat.side,
-                            depthTest: originalMat.depthTest,
-                            depthWrite: originalMat.depthWrite,
-                            // Add emissive for glow effect (convert to Phong for emissive)
-                        });
-                        // For basic material, we'll brighten the color slightly
-                        const hsl = {};
-                        obj.material.color.getHSL(hsl);
-                        obj.material.color.setHSL(hsl.h, hsl.s, Math.min(hsl.l + 0.3, 1.0));
                     }
                 } else {
                     // For regular visual meshes, use white highlight

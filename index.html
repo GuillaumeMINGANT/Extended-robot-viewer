@@ -39,6 +39,17 @@
             --blur-amount: 24px;
             --saturation: 180%;
             --spring: cubic-bezier(0.4, 0, 0.2, 1);
+            /* Default floating panel stack (Files/Joints left, Structure/Editor right) */
+            --panel-bar-top: 80px;
+            --panel-gap: 20px;
+            --panel-width: 360px;
+            --panel-inset: 20px;
+            --world-gizmo-clearance: 140px;
+            --panel-stack-height: calc(
+                (100vh - var(--panel-bar-top) - var(--world-gizmo-clearance) - var(--panel-gap)) / 2
+            );
+            /* Files + gap + Joints — left column span */
+            --panel-left-stack-height: calc(2 * var(--panel-stack-height) + var(--panel-gap));
         }
 
         [data-theme="light"] {
@@ -198,10 +209,10 @@
 
         /* File list floating panel */
         #floating-files-panel {
-            top: 80px;
-            left: 20px;
-            width: 360px;
-            height: 340px;
+            top: var(--panel-bar-top);
+            left: var(--panel-inset);
+            width: var(--panel-width);
+            height: var(--panel-stack-height);
             transition: all 0.4s var(--spring);
             display: flex;
             flex-direction: column;
@@ -219,15 +230,15 @@
 
         /* Joint control floating panel */
         #floating-joints-panel {
-            top: calc(80px + 340px + 20px);
-            left: 20px;
-            width: 360px;
-            height: calc(100vh - 80px - 340px - 40px - 140px);
+            top: calc(var(--panel-bar-top) + var(--panel-stack-height) + var(--panel-gap));
+            left: var(--panel-inset);
+            width: var(--panel-width);
+            height: var(--panel-stack-height);
             transition: all 0.4s var(--spring);
         }
 
         #floating-joints-panel.maximized {
-            top: 80px !important;
+            top: var(--panel-bar-top) !important;
             height: calc(100vh - 100px) !important;
         }
 
@@ -780,17 +791,26 @@
         }
 
         .control-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
             padding: 5px 12px;
             height: auto;
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             color: var(--text-secondary);
+            font-family: inherit;
             font-size: 11px;
             font-weight: 500;
+            line-height: 1.2;
             cursor: pointer;
-            transition: all 0.2s var(--spring);
+            appearance: none;
+            -webkit-appearance: none;
             white-space: nowrap;
+            overflow: hidden;
+            transition: all 0.3s var(--spring);
         }
 
         .control-button:hover {
@@ -825,6 +845,51 @@
 
         .control-button.active:active {
             transform: scale(0.98);
+        }
+
+        /* Same pill height for all top-bar display toggles (22px transparency icon fits inside) */
+        #top-control-bar .control-button {
+            box-sizing: border-box;
+            height: 26px;
+            padding: 0 12px;
+        }
+
+        #toggle-transparency-btn .control-btn-icon {
+            width: 22px;
+            height: 22px;
+        }
+
+        #show-com,
+        #toggle-axes-btn,
+        #toggle-joint-axes-btn {
+            gap: 6px;
+        }
+
+        .control-btn-icon {
+            display: inline-flex;
+            flex-shrink: 0;
+            width: 14px;
+            height: 14px;
+        }
+
+        .control-btn-icon svg {
+            display: block;
+            width: 14px;
+            height: 14px;
+        }
+
+        #toggle-transparency-btn .transparency-icon {
+            width: 22px;
+            height: 22px;
+            background-color: currentColor;
+            mask-image: url('/icons/Transparency.svg');
+            mask-size: contain;
+            mask-repeat: no-repeat;
+            mask-position: center;
+            -webkit-mask-image: url('/icons/Transparency.svg');
+            -webkit-mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            -webkit-mask-position: center;
         }
 
         #unit-toggle {
@@ -1308,35 +1373,37 @@
             background-clip: padding-box;
         }
 
-        /* Model tree floating panel */
+        /* Model tree floating panel (Structure — aligned with Files) */
         #floating-model-tree {
-            top: 80px;
-            left: calc(100vw - 360px - 20px);
-            width: 360px;
-            height: 340px;
+            top: var(--panel-bar-top);
+            left: calc(100vw - var(--panel-width) - var(--panel-inset));
+            width: var(--panel-width);
+            height: var(--panel-stack-height);
             transition: all 0.4s var(--spring);
         }
 
         #floating-model-tree.maximized {
-            top: 80px !important;
-            left: 20px !important;
-            width: calc(100vw - 40px) !important;
+            top: var(--panel-bar-top) !important;
+            left: var(--panel-inset) !important;
+            width: calc(100vw - 2 * var(--panel-inset)) !important;
             height: calc(100vh - 100px) !important;
         }
 
-        /* Measure floating panel */
+        /* Measure floating panel — Files width, top with Files, bottom with Joints */
         #floating-measure-panel {
-            top: 100px;
-            left: calc(50vw - 250px);
-            width: 500px;
-            height: 480px;
+            top: var(--panel-bar-top);
+            left: calc(var(--panel-inset) + var(--panel-width) + var(--panel-gap));
+            width: var(--panel-width);
+            height: var(--panel-left-stack-height);
             transition: all 0.4s var(--spring);
+            display: flex;
+            flex-direction: column;
         }
 
         #floating-measure-panel.maximized {
-            top: 80px !important;
-            left: 20px !important;
-            width: calc(100vw - 40px) !important;
+            top: var(--panel-bar-top) !important;
+            left: var(--panel-inset) !important;
+            width: calc(100vw - 2 * var(--panel-inset)) !important;
             height: calc(100vh - 100px) !important;
         }
 
@@ -2893,6 +2960,7 @@
             letter-spacing: 0.5px;
         }
 
+        #view-select,
         #up-select {
             padding: 5px 24px 5px 12px;
             height: auto;
@@ -2909,58 +2977,69 @@
             background-position: right 7px center;
         }
 
+        #view-select:hover,
         #up-select:hover {
             background-color: rgba(255, 255, 255, 0.12);
         }
 
+        #view-select:focus,
         #up-select:focus {
             outline: none;
             background-color: rgba(255, 255, 255, 0.12);
             background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9 5L5 1L1 5' stroke='%23aaaaaa' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
         }
 
+        [data-theme="dark"] #view-select option,
         [data-theme="dark"] #up-select option {
             background-color: #2a2a2a;
             color: var(--text-primary);
             padding: 8px 12px;
         }
 
+        [data-theme="dark"] #view-select option:hover,
         [data-theme="dark"] #up-select option:hover {
             background-color: rgba(10, 132, 255, 0.15);
         }
 
+        [data-theme="dark"] #view-select option:checked,
         [data-theme="dark"] #up-select option:checked {
             background: linear-gradient(135deg, var(--accent) 0%, rgba(10, 132, 255, 0.8) 100%);
             color: white;
         }
 
+        [data-theme="light"] #view-select,
         [data-theme="light"] #up-select {
             background-color: rgba(0, 0, 0, 0.04);
             border: 1px solid rgba(0, 0, 0, 0.1);
             background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23666666' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
         }
 
+        [data-theme="light"] #view-select:hover,
         [data-theme="light"] #up-select:hover {
             background-color: rgba(0, 0, 0, 0.08);
             border-color: rgba(0, 0, 0, 0.15);
         }
 
+        [data-theme="light"] #view-select:focus,
         [data-theme="light"] #up-select:focus {
             background-color: rgba(0, 0, 0, 0.08);
             border-color: var(--accent);
             background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9 5L5 1L1 5' stroke='%23666666' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
         }
 
+        [data-theme="light"] #view-select option,
         [data-theme="light"] #up-select option {
             background-color: #ffffff;
             color: var(--text-primary);
             padding: 8px 12px;
         }
 
+        [data-theme="light"] #view-select option:hover,
         [data-theme="light"] #up-select option:hover {
             background-color: rgba(0, 132, 255, 0.08);
         }
 
+        [data-theme="light"] #view-select option:checked,
         [data-theme="light"] #up-select option:checked {
             background: linear-gradient(135deg, var(--accent) 0%, rgba(10, 132, 255, 0.8) 100%);
             color: white;
@@ -2984,12 +3063,14 @@
             min-height: 100px;
         }
 
-        /* Code editor panel */
+        /* Code editor panel — same gap below Structure as Files/Joints; bottom inset unchanged */
         #code-editor-panel {
-            top: calc(80px + 340px + 20px);
-            left: calc(100vw - 360px - 20px);
-            width: 360px;
-            height: calc(100vh - 80px - 340px - 40px);
+            top: calc(var(--panel-bar-top) + var(--panel-stack-height) + var(--panel-gap));
+            left: calc(100vw - var(--panel-width) - var(--panel-inset));
+            width: var(--panel-width);
+            height: calc(
+                100vh - var(--panel-inset) - var(--panel-bar-top) - var(--panel-stack-height) - var(--panel-gap)
+            );
             display: none;
             transition: all 0.4s var(--spring);
         }
@@ -2999,9 +3080,9 @@
         }
 
         #code-editor-panel.maximized {
-            top: 80px !important;
-            left: 20px !important;
-            width: calc(100vw - 40px) !important;
+            top: var(--panel-bar-top) !important;
+            left: var(--panel-inset) !important;
+            width: calc(100vw - 2 * var(--panel-inset)) !important;
             height: calc(100vh - 100px) !important;
         }
 
@@ -3319,36 +3400,83 @@
         <div id="canvas-container">
             <div id="top-control-bar">
                 <div class="control-bar-section">
+                    <button class="control-button" id="toggle-transparency-btn" data-checked="false" data-i18n-title="transparency" title="Transparency">
+                        <span class="control-btn-icon transparency-icon" aria-hidden="true"></span>
+                    </button>
                     <button class="control-button active" id="show-visual" data-checked="true">
                         <span data-i18n="visual"></span>
                     </button>
-                    <button class="control-button" id="show-collision" data-checked="false">
-                        <span data-i18n="collision"></span>
-                    </button>
-                    <button class="control-button" id="show-inertia" data-checked="false">
-                        <span data-i18n="inertia"></span>
-                    </button>
-                    <button class="control-button" id="show-com" data-checked="false">
-                        <span data-i18n="com"></span>
-                    </button>
-                    <button class="control-button" id="toggle-axes-btn" data-checked="false">
-                        <span data-i18n="axes"></span>
-                    </button>
-                    <button class="control-button" id="toggle-joint-axes-btn" data-checked="false">
-                        <span data-i18n="jointAxes"></span>
+                    <button class="control-button active" id="toggle-lighting" data-checked="true">
+                        <span data-i18n="lighting"></span>
                     </button>
                     <button class="control-button active" id="toggle-shadow" data-checked="true">
                         <span data-i18n="shadow"></span>
-                    </button>
-                    <button class="control-button active" id="toggle-lighting" data-checked="true">
-                        <span data-i18n="lighting"></span>
                     </button>
                 </div>
 
                 <div class="control-bar-divider"></div>
 
                 <div class="control-bar-section">
+                    <button class="control-button" id="show-collision" data-checked="false">
+                        <span data-i18n="collision"></span>
+                    </button>
+                    <button class="control-button" id="show-inertia" data-checked="false">
+                        <span data-i18n="inertia"></span>
+                    </button>
+                    <button class="control-button" id="show-com" data-checked="false" title="Center of mass">
+                        <span class="control-btn-icon" aria-hidden="true">
+                            <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/>
+                                <path d="M8 1 A7 7 0 0 1 15 8 L8 8 Z" fill="#fff"/>
+                                <path d="M15 8 A7 7 0 0 1 8 15 L8 8 Z" fill="#000"/>
+                                <path d="M8 15 A7 7 0 0 1 1 8 L8 8 Z" fill="#fff"/>
+                                <path d="M1 8 A7 7 0 0 1 8 1 L8 8 Z" fill="#000"/>
+                            </svg>
+                        </span>
+                        <span data-i18n="com"></span>
+                    </button>
+                    <button class="control-button" id="toggle-axes-btn" data-checked="false">
+                        <span class="control-btn-icon" aria-hidden="true">
+                            <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="3.5" cy="12.5" r="1.2" fill="currentColor" opacity="0.4"/>
+                                <line x1="3.5" y1="12.5" x2="13.5" y2="12.5" stroke="#ef4444" stroke-width="1.4" stroke-linecap="round"/>
+                                <polygon points="13.5,12.5 11.5,11.5 11.5,13.5" fill="#ef4444"/>
+                                <line x1="3.5" y1="12.5" x2="3.5" y2="2.5" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round"/>
+                                <polygon points="3.5,2.5 2.5,4.5 4.5,4.5" fill="#22c55e"/>
+                                <line x1="3.5" y1="12.5" x2="11" y2="5" stroke="#3b82f6" stroke-width="1.4" stroke-linecap="round"/>
+                                <polygon points="11,5 9.2,6.2 10.4,7.8" fill="#3b82f6"/>
+                            </svg>
+                        </span>
+                        <span data-i18n="axes"></span>
+                    </button>
+                    <button class="control-button" id="toggle-joint-axes-btn" data-checked="false">
+                        <span class="control-btn-icon" aria-hidden="true">
+                            <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="1.5" fill="#888888"/>
+                                <line x1="8" y1="8" x2="13.5" y2="8" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="2.2 1.4"/>
+                                <path d="M8 11.8 A3.8 3.8 0 1 1 11.8 8" fill="none" stroke="#fbbf24" stroke-width="1.7" stroke-linecap="round"/>
+                                <polygon points="11.8,8 10.6,9.6 12.2,9.4" fill="#fbbf24"/>
+                            </svg>
+                        </span>
+                        <span data-i18n="jointAxes"></span>
+                    </button>
+                </div>
+
+                <div class="control-bar-divider"></div>
+
+                <div class="control-bar-section">
+                    <select id="view-select" class="control-bar-select">
+                        <option value="" disabled selected data-i18n="viewSelect">View</option>
+                        <option value="front" data-i18n="viewFront">Front</option>
+                        <option value="back" data-i18n="viewBack">Back</option>
+                        <option value="left" data-i18n="viewLeft">Left</option>
+                        <option value="right" data-i18n="viewRight">Right</option>
+                        <option value="top" data-i18n="viewTop">Top</option>
+                        <option value="bottom" data-i18n="viewBottom">Bottom</option>
+                        <option value="iso" data-i18n="viewIso">Isometric</option>
+                    </select>
                     <select id="up-select" class="control-bar-select">
+                        <option value="" disabled selected data-i18n="upSelect">Up</option>
                         <option value="+Z">+Z</option>
                         <option value="-Z">-Z</option>
                         <option value="+Y">+Y</option>
@@ -3374,7 +3502,10 @@
                         <span class="tool-button-text" data-i18n="measure"></span>
                     </button>
                     <button class="tool-button" id="open-editor-btn">
-                        <span class="tool-button-text" data-i18n="edit"></span>
+                        <span class="tool-button-text" data-i18n="editor"></span>
+                    </button>
+                    <button class="tool-button" id="toggle-measure-panel">
+                        <span class="tool-button-text" data-i18n="measure"></span>
                     </button>
                 </div>
 

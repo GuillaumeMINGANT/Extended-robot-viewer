@@ -4,12 +4,143 @@ import * as THREE from 'three';
  * CoordinateAxesManager - Handles link coordinate axes and joint axes visualization
  */
 export class CoordinateAxesManager {
+    /** Distinct from RGB link axes (red / green / blue) */
+    static JOINT_AXIS_COLOR = 0xf59e0b;
+    static JOINT_ROTATION_COLOR = 0xfbbf24;
+
     constructor(sceneManager) {
         this.sceneManager = sceneManager;
         this.linkAxesHelpers = new Map();
         this.jointAxesHelpers = new Map();
         this.showAxesEnabled = false;
         this.showJointAxesEnabled = false;
+        /** Overall robot span (max bbox dimension), set when a model loads */
+        this.modelScale = 1;
+    }
+
+    setModelScale(modelScale) {
+        this.modelScale = Math.max(modelScale, 1e-6);
+    }
+
+    /**
+     * Max dimension of an Object3D subtree (meters in scene units).
+     */
+    static measureObjectScale(object3d, fallback = 1) {
+        try {
+            if (object3d) {
+                object3d.updateMatrixWorld(true);
+                const bbox = new THREE.Box3().setFromObject(object3d);
+                if (!bbox.isEmpty()) {
+                    const size = bbox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 1e-6) return maxDim;
+                }
+            }
+        } catch (_) { /* use fallback */ }
+        return fallback;
+    }
+
+    /**
+     * Axis triad length: ~12% of link size, bounded by robot scale (not fixed meters).
+     * Tuned so a ~1.6 m humanoid stays near the previous ~14 cm cap.
+     */
+    static computeLinkAxesLength(linkSize = 1, modelScale = linkSize) {
+        const link = Math.max(linkSize, 1e-6);
+        const model = Math.max(modelScale, link, 1e-6);
+
+        const ideal = link * 0.12;
+        const minLen = Math.max(
+            link * 0.08,
+            Math.min(model * 0.025, link * 0.5)
+        );
+        const maxLen = Math.min(link * 0.35, model * 0.0875);
+
+        return Math.max(minLen, Math.min(ideal, maxLen));
+    }
+
+    /**
+     * Solid RGB triad matching world gizmo: MeshBasicMaterial (unlit, opaque), no labels.
+     * @param {number} axisLength - Total length of each axis arrow
+     * @param {{ showOrigin?: boolean }} options
+     * @returns {THREE.Group}
+     */
+    static createGizmoStyleAxesGroup(axisLength, { showOrigin = true } = {}) {
+        const group = new THREE.Group();
+        group.userData.isCoordinateAxes = true;
+        group.renderOrder = 100;
+
+        const headLength = axisLength * 0.22;
+        const headWidth = axisLength * 0.1;
+        const shaftRadius = Math.max(0.001, axisLength * 0.045);
+        const shaftLen = axisLength - headLength;
+
+        const axes = [
+            { color: 0xef4444, rotZ: -Math.PI / 2 },
+            { color: 0x22c55e },
+            { color: 0x3b82f6, rotX: Math.PI / 2 }
+        ];
+
+        axes.forEach(({ color, rotZ, rotX }) => {
+            const mat = new THREE.MeshBasicMaterial({
+                color,
+                toneMapped: false,
+                transparent: false,
+                opacity: 1,
+                depthTest: true,
+                depthWrite: true
+            });
+
+            const shaft = new THREE.Mesh(
+                new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLen, 8),
+                mat
+            );
+            const cone = new THREE.Mesh(
+                new THREE.ConeGeometry(headWidth, headLength, 12),
+                mat
+            );
+
+            const axisGroup = new THREE.Group();
+            shaft.position.y = shaftLen / 2;
+            cone.position.y = shaftLen + headLength / 2;
+            axisGroup.add(shaft, cone);
+            if (rotZ !== undefined) axisGroup.rotation.z = rotZ;
+            if (rotX !== undefined) axisGroup.rotation.x = rotX;
+
+            axisGroup.traverse((child) => {
+                child.renderOrder = 100;
+                child.castShadow = false;
+                child.receiveShadow = false;
+                if (child.material) {
+                    child.material.toneMapped = false;
+                    child.material.transparent = false;
+                    child.material.opacity = 1;
+                    child.material.depthTest = true;
+                    child.material.depthWrite = true;
+                    child.material.needsUpdate = true;
+                }
+            });
+            group.add(axisGroup);
+        });
+
+        if (showOrigin) {
+            const origin = new THREE.Mesh(
+                new THREE.SphereGeometry(axisLength * 0.08, 12, 12),
+                new THREE.MeshBasicMaterial({
+                    color: 0x888888,
+                    toneMapped: false,
+                    transparent: false,
+                    opacity: 1,
+                    depthTest: true,
+                    depthWrite: true
+                })
+            );
+            origin.renderOrder = 100;
+            origin.castShadow = false;
+            origin.receiveShadow = false;
+            group.add(origin);
+        }
+
+        return group;
     }
 
     /**
@@ -18,213 +149,159 @@ export class CoordinateAxesManager {
      * @returns {THREE.Group} Axes group
      */
     static createAxesGeometry(axesSize) {
-        const axesGroup = new THREE.Group();
-        const axisRadius = Math.max(0.001, axesSize * 0.015);
-        const axisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axesSize, 8);
-
-        // X axis (red)
-        const xAxis = new THREE.Mesh(axisGeometry, new THREE.MeshPhongMaterial({
-            color: 0xff0000, shininess: 30, depthTest: true
-        }));
-        xAxis.position.x = axesSize / 2;
-        xAxis.rotation.z = -Math.PI / 2;
-        xAxis.castShadow = false;
-        xAxis.receiveShadow = false;
-        axesGroup.add(xAxis);
-
-        // Y axis (green)
-        const yAxis = new THREE.Mesh(axisGeometry, new THREE.MeshPhongMaterial({
-            color: 0x00ff00, shininess: 30, depthTest: true
-        }));
-        yAxis.position.y = axesSize / 2;
-        yAxis.castShadow = false;
-        yAxis.receiveShadow = false;
-        axesGroup.add(yAxis);
-
-        // Z axis (blue)
-        const zAxis = new THREE.Mesh(axisGeometry, new THREE.MeshPhongMaterial({
-            color: 0x0000ff, shininess: 30, depthTest: true
-        }));
-        zAxis.position.z = axesSize / 2;
-        zAxis.rotation.x = Math.PI / 2;
-        zAxis.castShadow = false;
-        zAxis.receiveShadow = false;
-        axesGroup.add(zAxis);
-
-        return axesGroup;
+        return CoordinateAxesManager.createGizmoStyleAxesGroup(axesSize);
     }
 
     /**
-     * Static method: Create joint arrow geometry with rotation indicator
-     * @param {THREE.Vector3} axisDirection - Direction of joint axis
-     * @returns {THREE.Group} Arrow group with rotation indicator
+     * Dashed line along joint rotation axis (same length scale as link axes).
      */
-    static createJointArrowGeometry(axisDirection) {
-        const arrowLength = 0.2;
-        const shaftLength = arrowLength * 0.7;
-        const headLength = arrowLength * 0.3;
-        const shaftRadius = 0.004;
-        const headRadius = 0.012;
-        const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    static createJointAxisDashedLine(axisLength, axisDirection) {
+        const dir = axisDirection.clone().normalize();
+        const end = dir.clone().multiplyScalar(axisLength);
+        const geometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            end
+        ]);
+        const material = new THREE.LineDashedMaterial({
+            color: CoordinateAxesManager.JOINT_AXIS_COLOR,
+            dashSize: axisLength * 0.06,
+            gapSize: axisLength * 0.03,
+            depthTest: true,
+            transparent: false,
+            toneMapped: false
+        });
+        const line = new THREE.Line(geometry, material);
+        line.computeLineDistances();
+        line.renderOrder = 100;
+        return line;
+    }
 
-        const shaftGeometry = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLength, 16, 1);
-        const shaftMesh = new THREE.Mesh(shaftGeometry, arrowMaterial);
-        shaftMesh.position.y = shaftLength / 2;
-
-        const headGeometry = new THREE.ConeGeometry(headRadius, headLength, 16);
-        const headMesh = new THREE.Mesh(headGeometry, arrowMaterial);
-        headMesh.position.y = shaftLength + headLength / 2;
-
-        const arrow = new THREE.Group();
-        arrow.add(shaftMesh);
-        arrow.add(headMesh);
-
-        // Rotate arrow to point in axis direction
-        const upVector = new THREE.Vector3(0, 1, 0);
-        const quaternion = new THREE.Quaternion();
-        quaternion.setFromUnitVectors(upVector, axisDirection);
-        arrow.quaternion.copy(quaternion);
-
+    /**
+     * Static method: Create joint axis visualization (dashed line + rotation arc).
+     */
+    static createJointArrowGeometry(axisDirection, axisLength = 0.1) {
         const axisGroup = new THREE.Group();
-        axisGroup.add(arrow);
+        axisGroup.userData.isJointAxis = true;
+        axisGroup.renderOrder = 100;
 
-        // Add rotation direction indicator (green arc arrow)
-        const rotationIndicator = CoordinateAxesManager.createRotationIndicator(axisDirection, arrowLength);
-        axisGroup.add(rotationIndicator);
+        axisGroup.add(CoordinateAxesManager.createJointAxisDashedLine(axisLength, axisDirection));
+        axisGroup.add(CoordinateAxesManager.createRotationIndicator(
+            axisDirection,
+            axisLength,
+            CoordinateAxesManager.JOINT_ROTATION_COLOR
+        ));
 
         return axisGroup;
     }
 
     /**
-     * Static method: Create rotation direction indicator (arc arrow)
-     * @param {THREE.Vector3} axisDirection - Direction of joint axis
-     * @param {number} baseLength - Length of the arrow for sizing
-     * @returns {THREE.Group} Rotation indicator group
+     * Rotation-direction arc — proportions match createGizmoStyleAxesGroup at axisLength.
      */
-    static createRotationIndicator(axisDirection, baseLength) {
+    static createRotationIndicator(axisDirection, axisLength, color = CoordinateAxesManager.JOINT_ROTATION_COLOR) {
         const group = new THREE.Group();
-        const radius = baseLength * 0.25;
-        const tubeRadius = 0.002;
-        const arrowSize = 0.008;
-        const color = 0x00ff00; // Green
+        const radius = axisLength * 0.2;
+        const tubeRadius = axisLength * 0.045;
+        const arrowSize = axisLength * 0.1;
+        const arrowHeadLength = arrowSize * 2;
 
-        // Create arc curve (positive rotation direction, right-hand rule)
-        const arcAngle = Math.PI * 1.5; // Arc span 270 degrees
-        const curve = new THREE.EllipseCurve(
-            0, 0,
-            radius, radius,
-            0, arcAngle,
-            false,
-            0
-        );
+        const arcAngle = Math.PI * 1.5;
+        const curve = new THREE.EllipseCurve(0, 0, radius, radius, 0, arcAngle, false, 0);
+        const points3D = curve.getPoints(50).map(p => new THREE.Vector3(p.x, p.y, 0));
 
-        // Generate arc path points
-        const points = curve.getPoints(50);
-        const points3D = points.map(p => new THREE.Vector3(p.x, p.y, 0));
-
-        // Create tube geometry
         const curvePath = new THREE.CatmullRomCurve3(points3D);
-        const tubeGeometry = new THREE.TubeGeometry(curvePath, 50, tubeRadius, 8, false);
-        const tubeMaterial = new THREE.MeshBasicMaterial({ color: color });
-        const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
+        const tubeMat = new THREE.MeshBasicMaterial({
+            color,
+            toneMapped: false,
+            transparent: false,
+            depthTest: true
+        });
+        const tubeMesh = new THREE.Mesh(
+            new THREE.TubeGeometry(curvePath, 50, tubeRadius, 8, false),
+            tubeMat
+        );
         group.add(tubeMesh);
 
-        // Create arrow at arc end (cone)
-        const coneGeometry = new THREE.ConeGeometry(arrowSize, arrowSize * 2, 8);
-        const coneMaterial = new THREE.MeshBasicMaterial({ color: color });
-        const coneMesh = new THREE.Mesh(coneGeometry, coneMaterial);
-
-        // Calculate arrow position and direction
         const endPoint = points3D[points3D.length - 1];
         const preEndPoint = points3D[points3D.length - 5];
         const tangent = new THREE.Vector3().subVectors(endPoint, preEndPoint).normalize();
-
+        const coneMesh = new THREE.Mesh(
+            new THREE.ConeGeometry(arrowSize, arrowHeadLength, 8),
+            tubeMat
+        );
         coneMesh.position.copy(endPoint);
         coneMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
         group.add(coneMesh);
 
-        // Rotate entire arc arrow so it's perpendicular to axis direction
         const rotQuat = new THREE.Quaternion();
-        rotQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisDirection);
+        rotQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisDirection.clone().normalize());
         group.quaternion.copy(rotQuat);
+        group.position.copy(axisDirection.clone().normalize().multiplyScalar(axisLength * 0.75));
 
-        // Place arc near axis arrow
-        const position = axisDirection.clone().multiplyScalar(baseLength * 0.85);
-        group.position.copy(position);
+        group.traverse((child) => {
+            child.renderOrder = 100;
+            child.castShadow = false;
+            child.receiveShadow = false;
+        });
 
         return group;
+    }
+
+    /**
+     * Same length as the RGB link triad for linkName (must run after createLinkAxes).
+     */
+    getJointAxisLength(joint, modelSize = 1) {
+        for (const linkName of [joint.child, joint.parent]) {
+            const len = this.getStoredLinkAxesLength(linkName);
+            if (len != null) return len;
+        }
+        const model = this.sceneManager?.currentModel;
+        const linkName = joint.child || joint.parent;
+        const link = linkName && model?.links?.get(linkName);
+        const scale = this.modelScale || modelSize;
+        if (link) {
+            return CoordinateAxesManager.computeLinkAxesLength(
+                CoordinateAxesManager.measureLinkSize(link, scale),
+                scale
+            );
+        }
+        return CoordinateAxesManager.computeLinkAxesLength(scale, scale);
+    }
+
+    getStoredLinkAxesLength(linkName) {
+        if (!linkName) return null;
+        const axes = this.linkAxesHelpers.get(linkName);
+        const size = axes?.userData?.axesSize;
+        return size > 0 ? size : null;
+    }
+
+    static measureLinkSize(link, modelSize = 1) {
+        let linkSize = modelSize;
+        try {
+            if (link?.threeObject) {
+                link.threeObject.updateMatrixWorld(true);
+                const bbox = new THREE.Box3().setFromObject(link.threeObject);
+                if (!bbox.isEmpty()) {
+                    const size = bbox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 0.001) linkSize = maxDim;
+                }
+            }
+        } catch (_) { /* use modelSize */ }
+        return linkSize;
     }
 
     /**
      * Create coordinate axes for a link
      */
     createLinkAxes(link, linkName, modelSize = 1.0) {
-        // Calculate actual size of current link
-        let linkSize = modelSize; // Default use entire model size
-
-        try {
-            if (link.threeObject) {
-                link.threeObject.updateMatrixWorld(true);
-                const bbox = new THREE.Box3().setFromObject(link.threeObject);
-                if (!bbox.isEmpty()) {
-                    const size = bbox.getSize(new THREE.Vector3());
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    if (maxDim > 0.001) { // Ensure size is valid (greater than 1mm)
-                        linkSize = maxDim;
-                    }
-                }
-            }
-        } catch (error) {
-            // Failed to calculate Link size, using default
-        }
-
-        // Dynamically adjust axis length based on link size
-        // Axis length = 25% of link size, minimum 3cm, maximum 50cm
-        const axesSize = Math.max(0.03, Math.min(linkSize * 0.25, 0.5));
-        const axesGroup = new THREE.Group();
+        const scale = this.modelScale || modelSize;
+        const axesSize = CoordinateAxesManager.computeLinkAxesLength(
+            CoordinateAxesManager.measureLinkSize(link, scale),
+            scale
+        );
+        const axesGroup = CoordinateAxesManager.createGizmoStyleAxesGroup(axesSize);
         axesGroup.name = `${linkName}_axes`;
-
-        // Create three axes, thickness proportional to length
-        const axisRadius = Math.max(0.001, axesSize * 0.015); // 1.5% of length, minimum 1mm
-        const axisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axesSize, 8);
-
-        // X axis (red) - using lit material
-        const xAxisMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            shininess: 30,
-            depthTest: true
-        });
-        const xAxis = new THREE.Mesh(axisGeometry, xAxisMaterial);
-        xAxis.position.x = axesSize / 2;
-        xAxis.rotation.z = -Math.PI / 2;
-        xAxis.castShadow = false;
-        xAxis.receiveShadow = false;
-        axesGroup.add(xAxis);
-
-        // Y axis (green) - using lit material
-        const yAxisMaterial = new THREE.MeshPhongMaterial({
-            color: 0x00ff00,
-            shininess: 30,
-            depthTest: true
-        });
-        const yAxis = new THREE.Mesh(axisGeometry, yAxisMaterial);
-        yAxis.position.y = axesSize / 2;
-        yAxis.castShadow = false;
-        yAxis.receiveShadow = false;
-        axesGroup.add(yAxis);
-
-        // Z axis (blue) - using lit material
-        const zAxisMaterial = new THREE.MeshPhongMaterial({
-            color: 0x0000ff,
-            shininess: 30,
-            depthTest: true
-        });
-        const zAxis = new THREE.Mesh(axisGeometry, zAxisMaterial);
-        zAxis.position.z = axesSize / 2;
-        zAxis.rotation.x = Math.PI / 2;
-        zAxis.castShadow = false;
-        zAxis.receiveShadow = false;
-        axesGroup.add(zAxis);
+        axesGroup.userData.axesSize = axesSize;
 
         // Add to link's threeObject
         if (link.threeObject) {
@@ -241,26 +318,23 @@ export class CoordinateAxesManager {
     }
 
     /**
-     * Create joint axis visualization (large red arrow)
+     * Create joint axis visualization (dashed amber line + rotation arc).
      */
-    createJointAxis(joint, jointName) {
+    createJointAxis(joint, jointName, modelSize = 1) {
         if (!joint.threeObject || (joint.type !== 'revolute' && joint.type !== 'continuous')) {
-            return null; // Only create axis for revolute joints
+            return null;
         }
 
         const jointObject = joint.threeObject;
-
-        // Create joint axis helper (arrow)
         const axisGroup = new THREE.Group();
         axisGroup.name = `jointAxis_${jointName}`;
+        axisGroup.userData.isJointAxis = true;
+        axisGroup.renderOrder = 100;
 
-        // Get joint rotation axis direction (local coordinate system)
-        let localAxisDirection = new THREE.Vector3(0, 0, 1); // Default Z axis
-
-        // Prefer getting axis from urdf-loader's joint object
+        let localAxisDirection = new THREE.Vector3(0, 0, 1);
         if (jointObject.axis) {
             localAxisDirection.copy(jointObject.axis).normalize();
-        } else if (joint.axis && joint.axis.xyz) {
+        } else if (joint.axis?.xyz) {
             localAxisDirection.set(
                 joint.axis.xyz[0] || 0,
                 joint.axis.xyz[1] || 0,
@@ -268,44 +342,14 @@ export class CoordinateAxesManager {
             ).normalize();
         }
 
-        // Create a long arrow representing rotation axis
-        const arrowLength = 0.2;  // Arrow total length (reduced to half)
-        const shaftLength = arrowLength * 0.7;  // Shaft length
-        const headLength = arrowLength * 0.3;   // Arrow head length
-        const shaftRadius = 0.004;  // Shaft radius (reduced to half)
-        const headRadius = 0.012;   // Arrow head radius (reduced to half)
-        const arrowColor = 0xff0000; // Red
+        const axisLength = this.getJointAxisLength(joint, modelSize);
 
-        const arrowMaterial = new THREE.MeshBasicMaterial({ color: arrowColor });
-
-        // 1. Create shaft (cylinder)
-        const shaftGeometry = new THREE.CylinderGeometry(
-            shaftRadius, shaftRadius, shaftLength, 16, 1
-        );
-        const shaftMesh = new THREE.Mesh(shaftGeometry, arrowMaterial);
-
-        // 2. Create arrow head (cone)
-        const headGeometry = new THREE.ConeGeometry(headRadius, headLength, 32, 1);
-        const headMesh = new THREE.Mesh(headGeometry, arrowMaterial);
-
-        // 3. Assemble arrow (in local coordinate system, along Y axis)
-        const arrow = new THREE.Group();
-        shaftMesh.position.y = shaftLength / 2;
-        arrow.add(shaftMesh);
-        headMesh.position.y = shaftLength + headLength / 2;
-        arrow.add(headMesh);
-
-        // 4. Rotate arrow to align with joint axis direction (local coordinates)
-        const upVector = new THREE.Vector3(0, 1, 0);
-        const quaternion = new THREE.Quaternion();
-        quaternion.setFromUnitVectors(upVector, localAxisDirection);
-        arrow.quaternion.copy(quaternion);
-
-        axisGroup.add(arrow);
-
-        // 5. Create rotation direction indicator (arc arrow)
-        const rotationIndicator = this.createRotationIndicator(localAxisDirection, arrowLength);
-        axisGroup.add(rotationIndicator);
+        axisGroup.add(CoordinateAxesManager.createJointAxisDashedLine(axisLength, localAxisDirection));
+        axisGroup.add(CoordinateAxesManager.createRotationIndicator(
+            localAxisDirection,
+            axisLength,
+            CoordinateAxesManager.JOINT_ROTATION_COLOR
+        ));
 
         // Save reference (but don't add to scene yet)
         this.jointAxesHelpers.set(jointName, {
@@ -321,73 +365,6 @@ export class CoordinateAxesManager {
             this.jointAxesHelpers.get(jointName).isAttached = true;
         }
         return axisGroup;
-    }
-
-    /**
-     * Create rotation direction indicator (arc arrow)
-     */
-    createRotationIndicator(axisDirection, baseLength) {
-        const group = new THREE.Group();
-        const radius = baseLength * 0.25; // Arc radius (reduced, closer to axis)
-        const tubeRadius = 0.002; // Arc line thickness (thinner)
-        const arrowSize = 0.008; // Arrow size (smaller)
-        const color = 0x00ff00; // Green
-
-        // Create arc curve (positive rotation direction, right-hand rule)
-        const arcAngle = Math.PI * 1.5; // Arc span 270 degrees (3/4 circle)
-        const curve = new THREE.EllipseCurve(
-            0, 0,            // Center point
-            radius, radius,  // x radius, y radius
-            0, arcAngle,     // Start angle, end angle
-            false,           // Clockwise
-            0                // Rotation
-        );
-
-        // Generate arc path points
-        const points = curve.getPoints(50);
-        const points3D = points.map(p => new THREE.Vector3(p.x, p.y, 0));
-
-        // Create tube geometry (TubeGeometry)
-        const curvePath = new THREE.CatmullRomCurve3(points3D);
-        const tubeGeometry = new THREE.TubeGeometry(curvePath, 50, tubeRadius, 8, false);
-        const tubeMaterial = new THREE.MeshBasicMaterial({ color: color });
-        const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
-        group.add(tubeMesh);
-
-        // Create arrow at arc end (cone)
-        const coneGeometry = new THREE.ConeGeometry(arrowSize, arrowSize * 2, 8);
-        const coneMaterial = new THREE.MeshBasicMaterial({ color: color });
-        const coneMesh = new THREE.Mesh(coneGeometry, coneMaterial);
-
-        // Calculate arrow position and direction
-        const endPoint = points3D[points3D.length - 1];
-        const preEndPoint = points3D[points3D.length - 5]; // Slightly earlier point
-        const tangent = new THREE.Vector3().subVectors(endPoint, preEndPoint).normalize();
-
-        coneMesh.position.copy(endPoint);
-        coneMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
-        group.add(coneMesh);
-
-        // Rotate entire arc arrow so it's perpendicular to axis direction and around axis
-        // First find a vector perpendicular to axis
-        const perpVector = new THREE.Vector3();
-        if (Math.abs(axisDirection.y) < 0.9) {
-            perpVector.set(0, 1, 0);
-        } else {
-            perpVector.set(1, 0, 0);
-        }
-        perpVector.crossVectors(axisDirection, perpVector).normalize();
-
-        // Create rotation quaternion, make arc plane perpendicular to axis direction
-        const rotQuat = new THREE.Quaternion();
-        rotQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisDirection);
-        group.quaternion.copy(rotQuat);
-
-        // Place arc near axis arrow (closer to arrow tip)
-        const position = axisDirection.clone().multiplyScalar(baseLength * 0.85);
-        group.position.copy(position);
-
-        return group;
     }
 
     /**

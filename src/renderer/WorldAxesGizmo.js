@@ -18,7 +18,7 @@ export class WorldAxesGizmo {
         this.canvas.height = size * window.devicePixelRatio;
         this.canvas.style.cssText = `
             position: fixed;
-            bottom: 16px;
+            bottom: 8px;
             left: 16px;
             width: ${size}px;
             height: ${size}px;

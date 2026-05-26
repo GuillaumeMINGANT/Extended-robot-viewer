@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { ModelLoaderFactory } from '../loaders/ModelLoaderFactory.js';
 import { readFileContent, getFileFromEntry, getFileTypeFromExtension, getFileDisplayType } from '../utils/FileUtils.js';
+import { buildUrdfUrl, getCatalogBaseUrlForLoad } from '../catalog/RobotCatalogClient.js';
 
 export class FileHandler {
     constructor() {
@@ -563,6 +564,52 @@ export class FileHandler {
      */
     getCurrentModelFile() {
         return this.currentModelFile;
+    }
+
+    /**
+     * Load a robot from the remote JSON catalog (URDF + meshes over HTTP).
+     * @param {object} entry - Catalog manifest model entry
+     */
+    async loadCatalogModel(entry) {
+        const baseUrl = getCatalogBaseUrlForLoad();
+        const urdfUrl = buildUrdfUrl(baseUrl, entry.urdf);
+        const fileName = `${entry.id}.urdf`;
+
+        const model = await ModelLoaderFactory.loadURDFFromUrl(urdfUrl, {
+            catalogEntry: entry
+        });
+
+        const content = model.userData?.catalogUrdfContent ?? '';
+        const blob = new Blob([content], { type: 'text/xml' });
+        const file = new File([blob], fileName, { type: 'text/xml' });
+        file.catalogEntry = entry;
+        file.catalogUrdfUrl = urdfUrl;
+
+        this.fileMap.clear();
+        this.fileMap.set(fileName, file);
+        this.currentModelFile = file;
+
+        const displayPath = `${entry.brand}/${entry.name} (${entry.id})`;
+        this.fileMap.set(displayPath, file);
+
+        this.availableModels = [{
+            file,
+            name: entry.name,
+            type: 'urdf',
+            path: displayPath,
+            category: 'model',
+            ext: 'urdf'
+        }];
+
+        this.onFilesLoaded?.(this.availableModels);
+
+        model.name = entry.name;
+        model.sourceFileName = fileName;
+        this.attachSourceFileName(model, file);
+        this.onModelLoaded?.(model, file, false, null);
+
+        document.getElementById('drop-zone')?.classList.remove('show');
+        document.getElementById('drop-zone')?.classList.remove('drag-over');
     }
 }
 

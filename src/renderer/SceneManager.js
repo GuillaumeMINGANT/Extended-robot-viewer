@@ -308,6 +308,11 @@ export class SceneManager {
         }
         model.threeObject.updateMatrixWorld(true);
 
+        if (model.userData?.loadedFromCatalog) {
+            this.snapModelBottomToSceneY(model, 0);
+            model.threeObject.updateMatrixWorld(true);
+        }
+
         const modelSize = CoordinateAxesManager.measureObjectScale(model.threeObject, 1);
         const prevScale = this.axesManager.modelScale || 1;
         const scaleChanged = Math.abs(modelSize - prevScale) / Math.max(prevScale, 1e-6) > 0.02;
@@ -376,6 +381,30 @@ export class SceneManager {
     // ==================== Environment & Camera ====================
 
     /**
+     * Shift a loaded model so its lowest point sits on scene Y = targetY.
+     * Used for remote catalog URDFs whose base link may not align with the floor.
+     * @param {import('../models/UnifiedRobotModel.js').UnifiedRobotModel} model
+     * @param {number} targetY
+     */
+    snapModelBottomToSceneY(model, targetY = 0) {
+        const root = model?.threeObject;
+        const parent = root?.parent;
+        if (!root || !parent) return;
+
+        root.updateMatrixWorld(true);
+        const bbox = new THREE.Box3().setFromObject(root, true);
+        if (bbox.isEmpty()) return;
+
+        const dy = targetY - bbox.min.y;
+        if (Math.abs(dy) < 1e-6) return;
+
+        const delta = new THREE.Vector3(0, dy, 0);
+        parent.worldToLocal(delta);
+        root.position.add(delta);
+        root.updateMatrixWorld(true);
+    }
+
+    /**
      * Update environment (reference urdf-loaders' _updateEnvironment)
      * Auto-adjust ground position to robot lowest point, and update camera focus
      * @param {boolean} fitCamera - Whether to auto-adjust camera view (default false)
@@ -392,6 +421,11 @@ export class SceneManager {
             this.world.updateMatrixWorld(true);
         }
         model.threeObject.updateMatrixWorld(true);
+
+        if (model.userData?.loadedFromCatalog) {
+            this.snapModelBottomToSceneY(model, 0);
+            model.threeObject.updateMatrixWorld(true);
+        }
 
         // Directly calculate entire model's bounding box in scene global coordinate system
         const bboxGlobal = new THREE.Box3();

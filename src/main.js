@@ -15,6 +15,7 @@ import { CodeEditorManager } from './controllers/CodeEditorManager.js';
 import { MeasurementController } from './controllers/MeasurementController.js';
 import { USDViewerManager } from './renderer/USDViewerManager.js';
 import { MujocoSimulationManager } from './renderer/MujocoSimulationManager.js';
+import { MeasurePanelController } from './controllers/MeasurePanelController.js';
 import { i18n } from './utils/i18n.js';
 
 // Expose d3 globally for PanelManager
@@ -35,6 +36,7 @@ class App {
         this.fileTreeView = null;
         this.codeEditorManager = null;
         this.measurementController = null;
+        this.measurePanelController = null;
         this.usdViewerManager = null;
         this.mujocoSimulationManager = null;
         this.currentModel = null;
@@ -249,6 +251,9 @@ class App {
 
             // Initialize measurement controller
             this.measurementController = new MeasurementController(this.sceneManager);
+
+            // Initialize measure panel controller
+            this.measurePanelController = new MeasurePanelController(this.sceneManager);
 
             // Associate measurement controller with model graph view
             if (this.modelGraphView) {
@@ -575,6 +580,11 @@ class App {
 
         // Update model info
         this.updateModelInfo(model, file);
+
+        // Update measure panel
+        if (this.measurePanelController) {
+            this.measurePanelController.update(model);
+        }
     }
 
     /**
@@ -898,6 +908,11 @@ class App {
                 this.fileHandler.getFileMap(),
                 true
             );
+        }
+
+        // Update measure panel (if model exists)
+        if (this.currentModel && this.measurePanelController) {
+            this.measurePanelController.render();
         }
 
         // Update simulation button text

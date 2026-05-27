@@ -343,6 +343,8 @@ export class ModelLoaderFactory {
                 // Convert to unified model
                 try {
                     const model = URDFAdapter.convert(robot, content); // Pass original XML content
+                    if (!model.userData) model.userData = {};
+                    model.userData.urdfContent = content;
                     resolve(model);
                 } catch (error) {
                     console.error('URDF conversion error:', error);
@@ -485,6 +487,7 @@ export class ModelLoaderFactory {
                         model.userData.loadedFromCatalog = true;
                         model.userData.catalogUrdfUrl = urdfUrl;
                         model.userData.catalogUrdfContent = content;
+                        model.userData.urdfContent = content;
                         model.userData.catalogEntry = options.catalogEntry ?? null;
                         resolve(model);
                     } catch (error) {

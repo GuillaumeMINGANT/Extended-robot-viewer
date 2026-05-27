@@ -42,6 +42,9 @@ export class MeasurePanelController {
 
         /** Cached HumanoidKinematicsAnalyzer result per model load. */
         this._kinematicsCache = null;
+
+        /** @type {import('./IkController.js').IkController|null} */
+        this.ikController = null;
     }
 
     update(model) {
@@ -118,59 +121,44 @@ export class MeasurePanelController {
         const model = this.currentModel;
         const t = (k) => window.i18n?.t(k) || k;
         const stats = this.computeOverviewStats(model);
-        // bbox/com are in meters; format with user's linear unit
         const fmt = (m) => this.formatLinearDisplay(m);
 
+        const showLabel = t('measureShowVisual');
         const html = `
-            <div class="measure-overview">
-                <div class="measure-stat-group">
-                    <div class="measure-stat-title">${t('measureTotalMass')}</div>
-                    <div class="measure-stat-value">${stats.totalMass.toFixed(3)} kg</div>
+            <div class="measure-overview-compact">
+                <div class="ov-row">
+                    <span class="ov-label">${t('measureTotalMass')}</span>
+                    <span class="ov-value ov-accent">${stats.totalMass.toFixed(3)} kg</span>
                 </div>
-                <div class="measure-stat-group" style="position:relative;">
-                    <div class="measure-stat-row-header">
-                        <div class="measure-stat-title">${t('measureBoundingBox')}</div>
-                        <label class="measure-toggle"><input type="checkbox" id="measure-toggle-bbox" ${this.showBBox ? 'checked' : ''}/><span>${t('measureShowVisual')}</span></label>
-                    </div>
-                    <div class="measure-stat-grid">
-                        <span class="measure-dim-label">X:</span>
-                        <span class="measure-dim-value">${fmt(stats.bbox.x)}</span>
-                        <span class="measure-dim-label">Y:</span>
-                        <span class="measure-dim-value">${fmt(stats.bbox.y)}</span>
-                        <span class="measure-dim-label">Z:</span>
-                        <span class="measure-dim-value">${fmt(stats.bbox.z)}</span>
-                    </div>
-                    <button class="measure-refresh-mini" id="measure-refresh-bbox" title="${t('measureRefresh')}">⟳</button>
+                <div class="ov-row">
+                    <span class="ov-label">${t('measureStructure')}</span>
+                    <span class="ov-value">${stats.linkCount} ${t('links')} · ${stats.jointCount} ${t('joints')} · ${stats.controllableJoints} ${t('controllable')}</span>
                 </div>
-                <div class="measure-stat-group" style="position:relative;">
-                    <div class="measure-stat-row-header">
-                        <div class="measure-stat-title">${t('measureCenterOfMass')}</div>
-                        <label class="measure-toggle"><input type="checkbox" id="measure-toggle-com" ${this.showGlobalCOM ? 'checked' : ''}/><span>${t('measureShowVisual')}</span></label>
-                    </div>
-                    <div class="measure-stat-grid">
-                        <span class="measure-dim-label">X:</span>
-                        <span class="measure-dim-value">${fmt(stats.com.x)}</span>
-                        <span class="measure-dim-label">Y:</span>
-                        <span class="measure-dim-value">${fmt(stats.com.y)}</span>
-                        <span class="measure-dim-label">Z:</span>
-                        <span class="measure-dim-value">${fmt(stats.com.z)}</span>
-                    </div>
-                    <button class="measure-refresh-mini" id="measure-refresh-com" title="${t('measureRefresh')}">⟳</button>
+                <div class="ov-divider"></div>
+                <div class="ov-row">
+                    <span class="ov-label">${t('measureBoundingBox')}</span>
+                    <label class="measure-toggle"><input type="checkbox" id="measure-toggle-bbox" ${this.showBBox ? 'checked' : ''}/><span>${showLabel}</span></label>
                 </div>
-                <div class="measure-stat-group">
-                    <div class="measure-stat-title">${t('measureStructure')}</div>
-                    <div class="measure-stat-grid">
-                        <span class="measure-dim-label">${t('links')}:</span>
-                        <span class="measure-dim-value">${stats.linkCount}</span>
-                        <span class="measure-dim-label">${t('joints')}:</span>
-                        <span class="measure-dim-value">${stats.jointCount}</span>
-                        <span class="measure-dim-label">${t('controllable')}:</span>
-                        <span class="measure-dim-value">${stats.controllableJoints}</span>
-                    </div>
+                <div class="ov-xyz">
+                    <span>X <b>${fmt(stats.bbox.x)}</b></span>
+                    <span>Y <b>${fmt(stats.bbox.y)}</b></span>
+                    <span>Z <b>${fmt(stats.bbox.z)}</b></span>
                 </div>
+                <div class="ov-row">
+                    <span class="ov-label">${t('measureCenterOfMass')}</span>
+                    <label class="measure-toggle"><input type="checkbox" id="measure-toggle-com" ${this.showGlobalCOM ? 'checked' : ''}/><span>${showLabel}</span></label>
+                </div>
+                <div class="ov-xyz">
+                    <span>X <b>${fmt(stats.com.x)}</b></span>
+                    <span>Y <b>${fmt(stats.com.y)}</b></span>
+                    <span>Z <b>${fmt(stats.com.z)}</b></span>
+                </div>
+                ${this._buildReachabilityCompact(t)}
             </div>
         `;
         container.innerHTML = html;
+
+        this._bindReachabilityToggle(container);
 
         container.querySelector('#measure-toggle-com')?.addEventListener('change', (e) => {
             this.showGlobalCOM = e.target.checked;
@@ -188,17 +176,6 @@ export class MeasurePanelController {
             } else {
                 this.removeBBoxHelper();
             }
-        });
-
-        container.querySelector('#measure-refresh-bbox')?.addEventListener('click', () => {
-            if (this.showBBox) this.addBBoxHelper();
-            this.render();
-        });
-
-        container.querySelector('#measure-refresh-com')?.addEventListener('click', () => {
-            const freshStats = this.computeOverviewStats(this.currentModel);
-            if (this.showGlobalCOM) this.addGlobalCOMMarker(freshStats.com);
-            this.render();
         });
     }
 
@@ -1127,5 +1104,90 @@ export class MeasurePanelController {
                 this.sceneManager.focusObject(link.threeObject);
             }
         }
+    }
+
+    // ==================== Reachability (inside Overview) ====================
+
+    _buildReachabilityCompact(t) {
+        const ik = this.ikController;
+        if (!ik || !ik.kinematics || ik.tipLinks.length === 0) return '';
+
+        const isVisible = ik.reachabilityVisible;
+        const samples = ik.reachSamples;
+        const showLabel = t('measureShowVisual');
+
+        const tipRows = ik.tipLinks.map(tip => {
+            const label = ik.getTipLabel(tip);
+            const color = '#' + ik.getTipColor(tip).toString(16).padStart(6, '0');
+            const tipChecked = !isVisible || ik.isTipReachVisible(tip);
+            return `<label class="ov-reach-row">
+                <span class="ov-reach-dot" style="background:${color}"></span>
+                <span class="ov-reach-label">${label}</span>
+                <input type="checkbox" class="ov-reach-tip-cb" data-tip="${tip}" ${isVisible && tipChecked ? 'checked' : ''} ${isVisible ? '' : 'disabled'}/>
+            </label>`;
+        }).join('');
+
+        return `
+            <div class="ov-divider"></div>
+            <div class="ov-row">
+                <span class="ov-label">${t('measureReachability')}</span>
+                <label class="measure-toggle">
+                    <input type="checkbox" id="measure-toggle-reach" ${isVisible ? 'checked' : ''}/>
+                    <span>${showLabel}</span>
+                </label>
+            </div>
+            <div class="ov-reach-slider-row">
+                <input type="range" id="measure-reach-slider" min="0" max="10000" step="500" value="${samples}" class="ov-reach-slider"/>
+                <span class="ov-reach-slider-val" id="measure-reach-val">${samples}</span>
+            </div>
+            <div class="ov-reach-list">${tipRows}</div>`;
+    }
+
+    _bindReachabilityToggle(container) {
+        const ik = this.ikController;
+        if (!ik) return;
+
+        const slider = container.querySelector('#measure-reach-slider');
+        const valLabel = container.querySelector('#measure-reach-val');
+        let sliderTimer = null;
+        slider?.addEventListener('input', () => {
+            const n = parseInt(slider.value, 10);
+            ik.reachSamples = n;
+            if (valLabel) valLabel.textContent = n;
+            if (ik.reachabilityVisible) {
+                clearTimeout(sliderTimer);
+                sliderTimer = setTimeout(() => {
+                    ik.showReachability(n);
+                    this._syncTipCheckboxes(container);
+                }, 300);
+            }
+        });
+
+        container.querySelector('#measure-toggle-reach')?.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                ik.showReachability();
+            } else {
+                ik.hideReachability();
+            }
+            this._syncTipCheckboxes(container);
+        });
+
+        container.querySelectorAll('.ov-reach-tip-cb').forEach(cb => {
+            cb.addEventListener('change', () => {
+                ik.setTipReachVisible(cb.dataset.tip, cb.checked);
+            });
+        });
+    }
+
+    _syncTipCheckboxes(container) {
+        const ik = this.ikController;
+        if (!ik) return;
+        const visible = ik.reachabilityVisible;
+        container.querySelectorAll('.ov-reach-tip-cb').forEach(cb => {
+            cb.disabled = !visible;
+            if (visible) {
+                cb.checked = ik.isTipReachVisible(cb.dataset.tip);
+            }
+        });
     }
 }

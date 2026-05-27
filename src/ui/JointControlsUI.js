@@ -487,9 +487,11 @@ export class JointControlsUI {
                     this.sceneManager.redraw();
                     this.sceneManager.render();
 
-                    // Trigger measurement update
                     if (this.sceneManager.onMeasurementUpdate) {
                         this.sceneManager.onMeasurementUpdate();
+                    }
+                    if (this.sceneManager.onJointDragUpdate) {
+                        this.sceneManager.onJointDragUpdate(joint.name, value);
                     }
 
                     slider._pendingRender = false;
@@ -526,9 +528,11 @@ export class JointControlsUI {
             this.sceneManager.redraw();
             this.sceneManager.render();
 
-            // Trigger measurement update
             if (this.sceneManager.onMeasurementUpdate) {
                 this.sceneManager.onMeasurementUpdate();
+            }
+            if (this.sceneManager.onJointDragUpdate) {
+                this.sceneManager.onJointDragUpdate(joint.name, valueInRad);
             }
         });
 
@@ -627,6 +631,38 @@ export class JointControlsUI {
                     slider.step = (slider.max - slider.min) / 1000;
                 }
 
+                const control = slider.closest('.joint-control');
+                if (control && control._updateDisplay) {
+                    control._updateDisplay();
+                }
+            }
+        });
+    }
+
+    /**
+     * Sync a single slider to a new joint value (called by IK controller).
+     */
+    syncSliderValue(jointName, value) {
+        const slider = document.querySelector(`.joint-slider[data-joint="${jointName}"]`);
+        if (!slider) return;
+        slider.value = value;
+        const control = slider.closest('.joint-control');
+        if (control && control._updateDisplay) {
+            control._updateDisplay();
+        }
+    }
+
+    /**
+     * Sync all sliders to current joint values (called during animation).
+     */
+    syncAllSliders() {
+        document.querySelectorAll('.joint-slider').forEach(slider => {
+            const jointName = slider.getAttribute('data-joint');
+            const model = this.sceneManager?.currentModel;
+            if (!model) return;
+            const joint = model.joints.get(jointName);
+            if (joint && joint.type !== 'fixed') {
+                slider.value = joint.currentValue;
                 const control = slider.closest('.joint-control');
                 if (control && control._updateDisplay) {
                     control._updateDisplay();

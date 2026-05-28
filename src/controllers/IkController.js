@@ -136,13 +136,25 @@ export class IkController {
     /**
      * Select IK tip links using HumanoidKinematicsAnalyzer categories.
      *
+     * Priority:
+     *   1. Catalog-curated tipLinks (model.userData.catalogEntry.tipLinks)
+     *   2. Keyword-based limb detection per region
+     *   3. Topology-based supplement for uncovered deep branches
+     *   4. Leaf-link fallback for non-humanoid robots
+     *
      * Strategy per limb region:
      *   Arms  → Hand/Palm/Wrist base (branch point before fingers/gripper diverge)
      *   Legs  → Foot/Ankle (deepest non-toe link in chain)
      *   Head  → Head link (if leaf)
-     * Falls back to leaf-based heuristics for non-humanoid robots.
      */
     _selectTipLinks(model, analysis) {
+        // 1) Catalog-curated tips (most reliable for catalog robots)
+        const catalogTips = model.userData?.catalogEntry?.tipLinks;
+        if (Array.isArray(catalogTips) && catalogTips.length > 0) {
+            const valid = catalogTips.filter(t => model.links.has(t));
+            if (valid.length > 0) return valid;
+        }
+
         const linkCats = analysis.linkCategories;
 
         const DISTAL_ARM = new Set(['Finger', 'Gripper']);
@@ -172,6 +184,7 @@ export class IkController {
 
         const tips = new Set();
 
+        // 2) Keyword-based limb detection
         const findEeTip = (regionTag, distalParts, eeParts) => {
             const regionLeaves = [];
             const regionLinks = [];
@@ -241,17 +254,14 @@ export class IkController {
         for (const region of LEG_REGIONS) findEeTip(region, DISTAL_LEG, EE_LEG);
 
         // Head: find the deepest Head or Neck link.
-        // Prefer Head over Neck; among equals prefer deeper in chain.
         let bestHead = null, bestHeadDepth = -1, bestIsHead = false;
         linkCats.forEach((cats, name) => {
             const isHead = cats.includes('Head');
             const isNeck = cats.includes('Neck');
             if (!isHead && !isNeck) return;
-            // Skip links that are part of arm/leg regions (sensor links etc.)
             if (cats.some(c => c === 'Left Arm' || c === 'Right Arm' || c === 'Left Leg' || c === 'Right Leg')) return;
             let depth = 0, cur = name;
             while (parentMap.has(cur)) { cur = parentMap.get(cur).parentLink; depth++; }
-            // Prefer Head-tagged over Neck-tagged, then deeper
             if (isHead && !bestIsHead) {
                 bestHead = name; bestHeadDepth = depth; bestIsHead = true;
             } else if (isHead === bestIsHead && depth > bestHeadDepth) {
@@ -260,13 +270,71 @@ export class IkController {
         });
         if (bestHead) tips.add(bestHead);
 
+        // 3) Topology-based supplement: find deep uncovered branches
+        if (tips.size > 0 && tips.size < 6) {
+            this._supplementUncoveredBranches(model, parentMap, leafLinks, tips);
+        }
+
         if (tips.size > 0) return [...tips];
 
+        // 4) Leaf-link fallback for non-humanoid robots
         const fallbackLeaves = [...leafLinks].filter(n => {
             const cats = classifyCategories(n);
             return !(cats.includes('Other') && cats.length === 1);
         });
         return fallbackLeaves.slice(0, 8);
+    }
+
+    /**
+     * Find deep kinematic branches that have no tip yet and add their
+     * deepest leaf link. A branch is "uncovered" when its joints are
+     * mostly independent from every already-selected tip chain.
+     */
+    _supplementUncoveredBranches(model, parentMap, leafLinks, tips) {
+        const MIN_CHAIN_DEPTH = 3;
+        const MAX_OVERLAP = 0.5;
+        const MAX_TIPS = 8;
+
+        const chainJointsOf = (link) => {
+            const joints = new Set();
+            let cur = link;
+            while (parentMap.has(cur)) {
+                const { parentLink, joint } = parentMap.get(cur);
+                if (joint.type !== 'fixed') joints.add(joint.name);
+                cur = parentLink;
+            }
+            return joints;
+        };
+
+        const tipJointSets = new Map();
+        for (const tip of tips) tipJointSets.set(tip, chainJointsOf(tip));
+
+        const candidates = [];
+        for (const leaf of leafLinks) {
+            if (tips.has(leaf)) continue;
+            const myJoints = chainJointsOf(leaf);
+            if (myJoints.size < MIN_CHAIN_DEPTH) continue;
+
+            let maxOverlap = 0;
+            for (const [, tipJoints] of tipJointSets) {
+                let overlap = 0;
+                for (const j of myJoints) {
+                    if (tipJoints.has(j)) overlap++;
+                }
+                maxOverlap = Math.max(maxOverlap, overlap / myJoints.size);
+            }
+
+            if (maxOverlap < MAX_OVERLAP) {
+                candidates.push({ name: leaf, depth: myJoints.size });
+            }
+        }
+
+        candidates.sort((a, b) => b.depth - a.depth);
+        for (const c of candidates) {
+            if (tips.size >= MAX_TIPS) break;
+            tips.add(c.name);
+            tipJointSets.set(c.name, chainJointsOf(c.name));
+        }
     }
 
     /**

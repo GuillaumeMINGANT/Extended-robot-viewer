@@ -10,7 +10,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -67,12 +67,24 @@ jobs:
             echo "::error::dist/index.html missing GitHub Pages base path"
             exit 1
           fi
+          echo "Built entry script:"
+          grep -o 'src="[^"]*main[^"]*"' dist/index.html | head -3
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
+      # Fallback for Settings → Deploy from branch → gh-pages / (root)
+      - name: Publish built dist to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+
+  # Preferred: Settings → Pages → Source → GitHub Actions
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -80,6 +92,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (Actions)
         id: deployment
         uses: actions/deploy-pages@v4

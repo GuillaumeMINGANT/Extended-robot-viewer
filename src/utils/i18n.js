@@ -115,6 +115,7 @@ export const translations = {
 
         'settingsTitle': '设置',
         'settingsClose': '关闭',
+        'githubRepoAria': '在 GitHub 上打开仓库',
         'settingsOpenAria': '打开设置',
         'settingsToggleOpen': '打开设置',
         'settingsToggleClose': '关闭设置',
@@ -361,6 +362,7 @@ export const translations = {
 
         'settingsTitle': 'Settings',
         'settingsClose': 'Close',
+        'githubRepoAria': 'Open repository on GitHub',
         'settingsOpenAria': 'Open settings',
         'settingsToggleOpen': 'Open settings',
         'settingsToggleClose': 'Close settings',
@@ -573,7 +575,7 @@ class I18n {
             const key = element.getAttribute('data-i18n-title');
             const text = this.t(key);
             element.title = text;
-            if (element.tagName === 'BUTTON') {
+            if (element.tagName === 'BUTTON' || element.hasAttribute('aria-label')) {
                 element.setAttribute('aria-label', text);
             }
         });

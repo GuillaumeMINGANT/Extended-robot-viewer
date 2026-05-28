@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Avoid Node 20 deprecation warnings on checkout/cache actions (see GitHub changelog 2025-09-19)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
   pages: write
@@ -24,10 +28,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
           version: 9
 
@@ -52,6 +56,17 @@ jobs:
         run: pnpm run build
         env:
           GITHUB_PAGES: true
+
+      - name: Verify production bundle
+        run: |
+          if grep -q 'src="/src/main.js"' dist/index.html; then
+            echo "::error::dist/index.html still references /src/main.js — build did not run correctly"
+            exit 1
+          fi
+          if ! grep -q '/Extended-robot-viewer/' dist/index.html; then
+            echo "::error::dist/index.html missing GitHub Pages base path"
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

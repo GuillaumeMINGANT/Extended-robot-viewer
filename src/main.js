@@ -21,6 +21,8 @@ import { i18n } from './utils/i18n.js';
 import { RobotCatalogPanel } from './ui/RobotCatalogPanel.js';
 import { SettingsPanel } from './ui/SettingsPanel.js';
 import { PerformanceMonitor } from './ui/PerformanceMonitor.js';
+import { IkController } from './controllers/IkController.js';
+import { ControllerPanelUI } from './ui/ControllerPanelUI.js';
 
 // Expose d3 globally for PanelManager
 window.d3 = d3;
@@ -50,6 +52,8 @@ class App {
         this.angleUnit = 'rad';
         this.vscodeFileMap = new Map(); // Store VSCode files
         this.robotCatalogPanel = null;
+        this.ikController = null;
+        this.controllerPanelUI = null;
     }
 
     /**
@@ -205,12 +209,39 @@ class App {
                 performanceMonitor: this.performanceMonitor
             });
 
+            // Initialize IK controller
+            this.ikController = new IkController({
+                sceneManager: this.sceneManager,
+                onJointChanged: (name, value) => {
+                    this.jointControlsUI?.syncSliderValue?.(name, value);
+                },
+                onAnimationTick: () => {
+                    this.jointControlsUI?.syncAllSliders?.();
+                },
+                onSolverChanged: () => {
+                    this.controllerPanelUI?.refresh();
+                }
+            });
+
+            this.controllerPanelUI = new ControllerPanelUI({
+                ikController: this.ikController,
+                onRequestInfoModal: () => this.showIkInfoModal()
+            });
+
             // Set measurement update callback
             this.sceneManager.onMeasurementUpdate = () => {
                 if (this.measurementController) {
                     this.measurementController.updateMeasurement();
                 }
             };
+
+            // Sync IK gizmos when joints change via direct link dragging
+            this.sceneManager.onJointDragUpdate = () => {
+                this.ikController?.syncGizmoPositions();
+            };
+
+            // Controller panel sub-tab switching
+            this.setupControllerTabs();
 
             // Setup canvas click handler
             this.setupCanvasClickHandler(canvas);
@@ -279,6 +310,7 @@ class App {
 
             // Measure panel (floating) + bottom-right unit system picker (SolidWorks-style)
             this.measurePanelController = new MeasurePanelController(this.sceneManager);
+            this.measurePanelController.ikController = this.ikController;
             this.measureUnitsStatusBar = new MeasureUnitsStatusBar();
             this.measureUnitsStatusBar.mount();
             this.measureUnitsStatusBar.bind(this.measurePanelController);
@@ -430,6 +462,8 @@ class App {
 
         // Clear old model
         if (this.currentModel) {
+            this.ikController?.dispose();
+            this.controllerPanelUI?.unmount();
             this.sceneManager.removeModel(this.currentModel);
             this.currentModel = null;
         }
@@ -525,6 +559,13 @@ class App {
             this.sceneManager.setGroundVisible(true);
             this.jointControlsUI.setupJointControls(model);
 
+            // Initialize IK controller for this model
+            if (this.ikController) {
+                this.ikController.init(model);
+                this.controllerPanelUI?.mount();
+                this.controllerPanelUI?.refresh();
+            }
+
             // Draw model graph
             if (this.modelGraphView) {
                 this.modelGraphView.drawModelGraph(model);
@@ -613,6 +654,22 @@ class App {
         if (this.measurePanelController) {
             this.measurePanelController.update(model);
         }
+    }
+
+    /**
+     * Setup controller panel sub-tab switching (Direct / IK).
+     */
+    setupControllerTabs() {
+        const tabBtns = document.querySelectorAll('.controller-tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabId = btn.dataset.controllerTab;
+                tabBtns.forEach(b => b.classList.toggle('active', b === btn));
+                document.querySelectorAll('.controller-tab-pane').forEach(pane => {
+                    pane.classList.toggle('active', pane.id === `controller-${tabId}-pane`);
+                });
+            });
+        });
     }
 
     /**
@@ -1058,6 +1115,70 @@ class App {
     }
 
     /**
+     * Show IK info modal with math explanation.
+     */
+    showIkInfoModal() {
+        let modal = document.getElementById('ik-info-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            return;
+        }
+
+        modal = document.createElement('div');
+        modal.id = 'ik-info-modal';
+        modal.className = 'ik-info-modal';
+        modal.innerHTML = `
+            <div class="ik-info-backdrop"></div>
+            <div class="ik-info-content">
+                <div class="ik-info-header">
+                    <h2>Inverse Kinematics Solver</h2>
+                    <button class="ik-info-close">&times;</button>
+                </div>
+                <div class="ik-info-body">
+                    <section>
+                        <h3>Damped Least-Squares (DLS)</h3>
+                        <p>The solver uses the DLS pseudo-inverse method to compute joint velocity increments from the task-space error:</p>
+                        <div class="ik-math">Δq = Jᵀ (J Jᵀ + λ² I)⁻¹ e</div>
+                        <p>where <strong>J</strong> is the geometric Jacobian, <strong>e</strong> is the 6D pose error (position + orientation), and <strong>λ</strong> is the damping factor.</p>
+                    </section>
+                    <section>
+                        <h3>Adaptive Damping</h3>
+                        <p>The damping factor λ adapts to the manipulability of the configuration:</p>
+                        <div class="ik-math">w = √det(J Jᵀ)</div>
+                        <div class="ik-math">λ = λ_max · (1 − (w / w_threshold)²) when w &lt; w_threshold</div>
+                        <p>Near singularities (low manipulability), damping increases to avoid large joint velocities. Far from singularities, minimal damping allows fast convergence.</p>
+                    </section>
+                    <section>
+                        <h3>Null-Space Limit Avoidance</h3>
+                        <p>For redundant chains (DOF &gt; task dimension), the null-space projector pushes joints away from limits without affecting the end-effector:</p>
+                        <div class="ik-math">Δq_ns = α (I − J⁺ J) ∇H(q)</div>
+                        <p>where <strong>∇H(q)</strong> is a gradient that repels joints from the margin zone near limits, and <strong>α</strong> is the null-space gain.</p>
+                    </section>
+                    <section>
+                        <h3>Geometric Jacobian</h3>
+                        <p>For each revolute joint i with world axis <strong>zᵢ</strong> and position <strong>pᵢ</strong>:</p>
+                        <div class="ik-math">Jᵢ = [ zᵢ × (p_tip − pᵢ) ; zᵢ ]ᵀ</div>
+                        <p>For prismatic joints: Jᵢ = [ zᵢ ; 0 ]ᵀ</p>
+                    </section>
+                    <section>
+                        <h3>Reachability Analysis</h3>
+                        <p>The reachability point cloud is generated by Monte Carlo sampling: random joint configurations are drawn uniformly within limits, and FK is computed for each sample to obtain the tip position. The result visualizes the workspace boundary for each kinematic chain.</p>
+                    </section>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('.ik-info-close').addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+        modal.querySelector('.ik-info-backdrop').addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+    }
+
+    /**
      * Animation loop
      */
     animate() {
@@ -1065,6 +1186,9 @@ class App {
         const frameStart = performance.now();
         if (this.sceneManager) {
             this.sceneManager.update();
+
+            // Update IK pose animations
+            this.ikController?.update();
 
             // Update MuJoCo simulation
             if (this.mujocoSimulationManager && this.mujocoSimulationManager.hasScene()) {

@@ -277,6 +277,8 @@ export class XacroAdapter {
                     // Convert to unified model using URDFAdapter
                     try {
                         const model = URDFAdapter.convert(robot, finalUrdfString);
+                        if (!model.userData) model.userData = {};
+                        model.userData.urdfContent = finalUrdfString;
                         resolve(model);
                     } catch (error) {
                         console.error('[XacroAdapter] URDF conversion error:', error);

@@ -222,6 +222,9 @@ export class URDFAdapter {
         }
 
         joint.threeObject = urdfJoint;
+        if (urdfJoint.mimicJoint) {
+            joint.mimics = urdfJoint.mimicJoint;
+        }
 
         // Convert origin
         if (urdfJoint.origin) {
@@ -231,9 +234,17 @@ export class URDFAdapter {
             };
         }
 
-        // Convert axis
+        // Convert axis — urdf-loader stores axis as THREE.Vector3
         if (urdfJoint.axis) {
-            joint.axis = { xyz: urdfJoint.axis.xyz || [0, 0, 1] };
+            if (urdfJoint.axis.isVector3) {
+                joint.axis = { xyz: [urdfJoint.axis.x, urdfJoint.axis.y, urdfJoint.axis.z] };
+            } else if (Array.isArray(urdfJoint.axis.xyz)) {
+                joint.axis = { xyz: urdfJoint.axis.xyz };
+            } else if (Array.isArray(urdfJoint.axis)) {
+                joint.axis = { xyz: urdfJoint.axis };
+            } else {
+                joint.axis = { xyz: [0, 0, 1] };
+            }
         }
 
         // Convert limits

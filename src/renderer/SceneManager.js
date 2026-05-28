@@ -776,6 +776,11 @@ export class SceneManager {
             if (this.onMeasurementUpdate) {
                 this.onMeasurementUpdate();
             }
+
+            // Notify IK controller so gizmos follow the arm
+            if (this.onJointDragUpdate) {
+                this.onJointDragUpdate(joint.name, angle);
+            }
         };
 
         // Hover highlight callback (handle immediately, like urdf-loaders)

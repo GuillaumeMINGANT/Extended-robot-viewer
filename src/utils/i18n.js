@@ -28,6 +28,7 @@ export const translations = {
         'viewIso': '等轴测',
         'files': '文件',
         'joints': '关节',
+        'controller': '控制器',
         'structure': '结构',
         'editor': '编辑器',
         'measure': '测量',
@@ -236,7 +237,20 @@ export const translations = {
         'downloadFailed': '下载失败',
         'fileDownloaded': '文件已下载',
         'emptyContent': '编辑器内容为空，无法加载',
-        'fileType': '文件类型'
+        'fileType': '文件类型',
+
+        // IK 控制器
+        'ikEnable': '逆运动学',
+        'ikHome': '初始姿态',
+        'ikRandom': '随机姿态',
+        'ikReachability': '可达性',
+        'ikInfo': '求解器信息',
+        'ikSolver': '求解器',
+        'ikSolverDLSDesc': '阻尼最小二乘法 (Jacobian)',
+        'ikSolverQPDesc': '二次规划 (任务空间)',
+        'controllerDirect': '直接控制',
+        'controllerIK': 'IK',
+        'measureReachability': '可达性'
     },
     'en-US': {
         // Top control bar
@@ -260,6 +274,7 @@ export const translations = {
         'viewIso': 'Isometric',
         'files': 'Files',
         'joints': 'Joints',
+        'controller': 'Controller',
         'structure': 'Structure',
         'editor': 'Editor',
         'measure': 'Measure',
@@ -468,7 +483,20 @@ export const translations = {
         'downloadFailed': 'Download failed',
         'fileDownloaded': 'File downloaded',
         'emptyContent': 'Editor content is empty, cannot load',
-        'fileType': 'File Type'
+        'fileType': 'File Type',
+
+        // IK Controller
+        'ikEnable': 'Inverse Kinematics',
+        'ikHome': 'Home Pose',
+        'ikRandom': 'Random Pose',
+        'ikReachability': 'Reachability',
+        'ikInfo': 'Solver Info',
+        'ikSolver': 'Solver',
+        'ikSolverDLSDesc': 'Damped Least-Squares (Jacobian)',
+        'ikSolverQPDesc': 'Quadratic Programming (Task-space)',
+        'controllerDirect': 'Direct',
+        'controllerIK': 'IK',
+        'measureReachability': 'Reachability'
     }
 };
 

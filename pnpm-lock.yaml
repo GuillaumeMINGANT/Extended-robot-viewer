@@ -29,9 +29,6 @@ importers:
       '@codemirror/view':
         specifier: ^6.23.0
         version: 6.38.6
-      '@daoming.chen/kinex':
-        specifier: ^1.0.0
-        version: 1.0.0
       '@uiw/codemirror-theme-dracula':
         specifier: ^4.21.21
         version: 4.25.2(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.6)
@@ -96,10 +93,6 @@ packages:
 
   '@codemirror/view@6.38.6':
     resolution: {integrity: sha512-qiS0z1bKs5WOvHIAC0Cybmv4AJSkAXgX5aD6Mqd2epSLlVJsQl8NG23jCVouIgkh4All/mrbdsf2UOLFnJw0tw==}
-
-  '@daoming.chen/kinex@1.0.0':
-    resolution: {integrity: sha512-mWtGiNI339czVs6fHnpcv0Gp0oLPSDmLTplzapICPSfforNevAddAiwMgqJoS4H8dM78glBW7iy5Z1CNbU5hUQ==}
-    engines: {node: '>=14.0.0'}
 
   '@esbuild/android-arm64@0.18.20':
     resolution: {integrity: sha512-Nz4rJcchGDtENV0eMKUNa6L12zz2zBDXuhj/Vjh18zGqB44Bi7MBMSXjgunJgjRhCmKOjnPuZp4Mb6OKqtMHLQ==}
@@ -668,8 +661,6 @@ snapshots:
       crelt: 1.0.6
       style-mod: 4.1.3
       w3c-keyname: 2.2.8
-
-  '@daoming.chen/kinex@1.0.0': {}
 
   '@esbuild/android-arm64@0.18.20':
     optional: true

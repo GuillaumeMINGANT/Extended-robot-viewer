@@ -116,6 +116,28 @@ pnpm run build
 
 Output will be in the `dist/` directory.
 
+## GitHub Pages (live demo)
+
+The live site must serve the **Vite build** in `dist/`, not the raw repo. If the page loads but nothing is clickable, open **View page source** — a broken deploy still has `src="/src/main.js"`; a correct deploy has `src="/Extended-robot-viewer/assets/js/..."`.
+
+### One-time setup (pick **one** option)
+
+**Option A — GitHub Actions (recommended)**
+
+1. [Settings → Pages](https://github.com/GuillaumeMINGANT/Extended-robot-viewer/settings/pages) → **Build and deployment → Source** → **GitHub Actions**
+2. Merge to `main` or run **Actions → Deploy to GitHub Pages → Run workflow**
+
+**Option B — `gh-pages` branch**
+
+1. Same Pages settings → **Deploy from a branch** → branch **`gh-pages`** → folder **`/ (root)`** (not `main`)
+2. After the workflow runs, it updates `gh-pages` with the built `dist/` contents
+
+Do **not** use **main** / **(root)** — that publishes unbuilt source and breaks the app.
+
+### After deploy
+
+Hard-refresh https://guillaumemingant.github.io/Extended-robot-viewer/ (Ctrl+F5).
+
 ## Contributing
 
 We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.

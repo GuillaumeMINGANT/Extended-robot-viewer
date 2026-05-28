@@ -1,0 +1,33 @@
+---
+description: Never push or commit without explicit user permission
+alwaysApply: true
+---
+
+# Git safety — no unauthorized commits or pushes
+
+## Hard rules
+
+- **Never run `git commit`** unless the user explicitly asks to commit in the current message or a user rule.
+- **Never run `git push`** unless the user explicitly asks to push in the current message or a user rule.
+- **Never push to `main` or `master`** unless the user explicitly names that branch and asks to push.
+- **Never force-push** (`--force`, `-f`, `--force-with-lease`) unless the user explicitly requests it.
+- **Never amend, rebase, reset, or cherry-pick** onto shared branches to "fix" CI or deploy issues without explicit approval.
+
+## Workflow for fixes
+
+1. Work on a **feature/fix branch** (e.g. `fix/github-pages-deploy-and-readme-screenshot`), not on `main`.
+2. Leave changes **uncommitted locally** when the user says not to commit — summarize what is ready and let them review.
+3. When deployment or README fixes are needed, prepare a **PR from the fix branch**; do not land directly on `main`.
+4. Do not add `Co-authored-by: Cursor` or similar trailers unless the user asks.
+
+## Examples
+
+```
+# ❌ BAD — user said "don't push"
+git commit -m "fix deploy"
+git push origin main
+
+# ✅ GOOD — local edits on fix branch, user decides when to commit/push
+git checkout fix/my-branch
+# edit files, then tell user: "Ready on fix/my-branch — review and commit when you want"
+```

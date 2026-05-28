@@ -89,16 +89,26 @@ function sideFromNumericId(id) {
 }
 
 /**
+ * Normalize separator characters (space, hyphen, slash) to underscores
+ * for uniform pattern matching.
+ * @param {string} text
+ * @returns {string}
+ */
+function normalizeSeparators(text) {
+    return text.replace(/[\s\-\/]/g, '_');
+}
+
+const BODY_PART_PREFIXES = '(?:arm|leg|hand|foot|hip|knee|ankle|shoulder|elbow|wrist|palm|finger|thumb|toe|gripper)';
+
+/**
  * @param {string} text
  * @returns {'left'|'right'|null}
  */
 function detectSide(text) {
-    if (/_sym(?:_|$)/.test(text) || /\bleft\b|_left(?:_|$)|foot_left|ankle_left|_l_leg|hipx_left|hipy_left|hipz_left/.test(text)) {
-        return 'left';
-    }
-    if (/\bright\b|_right(?:_|$)|foot_right|ankle_right|_r_leg|hipx_right|hipy_right|hipz_right|anklex_right|ankley_right|knee_right/.test(text)) {
-        return 'right';
-    }
+    const t = normalizeSeparators(text);
+
+    if (isLeftToken(t)) return 'left';
+    if (isRightToken(t)) return 'right';
 
     const primaryId = detectPrimaryNumericId(text);
     if (primaryId !== null) {
@@ -106,6 +116,31 @@ function detectSide(text) {
     }
 
     return null;
+}
+
+/** @param {string} t  separator-normalized lowercase text */
+function isLeftToken(t) {
+    return new RegExp(
+        '(?:^|_)left(?:_|$)'                       // left as token: left_hip, hip_left
+        + '|(?:^|_)l_'                              // l_ prefix/infix: l_hip, arm_l_joint
+        + '|_l$'                                    // _l suffix: hip_l
+        + '|(?:^|_)(?:fl|rl|lf|lh|lr)_'            // quadruped / JAXON: FL_, RL_, LF_, LH_
+        + '|(?:^|_)l' + BODY_PART_PREFIXES          // compact: larm, lleg, lhip, leftarm, leftpalm
+        + '|(?:^|_)left' + BODY_PART_PREFIXES
+        + '|_sym(?:_|$)'                            // symmetry marker convention
+    ).test(t);
+}
+
+/** @param {string} t  separator-normalized lowercase text */
+function isRightToken(t) {
+    return new RegExp(
+        '(?:^|_)right(?:_|$)'                      // right as token
+        + '|(?:^|_)r_'                              // r_ prefix/infix
+        + '|_r$'                                    // _r suffix
+        + '|(?:^|_)(?:fr|rr|rf|rh)_'               // quadruped / JAXON: FR_, RR_, RF_, RH_
+        + '|(?:^|_)r' + BODY_PART_PREFIXES          // compact: rarm, rleg, rhip, rightarm
+        + '|(?:^|_)right' + BODY_PART_PREFIXES
+    ).test(t);
 }
 
 /**
@@ -223,22 +258,22 @@ export function classifyCategories(primaryName, childName = null, parentName = n
  * @returns {'yaw'|'pitch'|'roll'|null}
  */
 export function classifyJointAxis(jointName, joint) {
-    const text = jointName.toLowerCase();
+    const text = normalizeSeparators(jointName.toLowerCase());
 
-    if (/\babduction\b|\badduction\b/.test(text)) return 'pitch';
-    if (/\bflexion\b/.test(text)) return 'roll';
-    if (/\brotation\b|\brotate\b/.test(text)) return 'yaw';
-    if (/\broll\b|_roll\b/.test(text)) return 'roll';
-    if (/\bpitch\b|_pitch\b/.test(text)) return 'pitch';
-    if (/\byaw\b|_yaw\b/.test(text)) return 'yaw';
+    if (/(?:^|_)abduction(?:_|$)|(?:^|_)adduction(?:_|$)/.test(text)) return 'pitch';
+    if (/(?:^|_)flexion(?:_|$)/.test(text)) return 'roll';
+    if (/(?:^|_)rotation(?:_|$)|(?:^|_)rotate(?:_|$)/.test(text)) return 'yaw';
+    if (/(?:^|_)roll(?:_|$)/.test(text)) return 'roll';
+    if (/(?:^|_)pitch(?:_|$)/.test(text)) return 'pitch';
+    if (/(?:^|_)yaw(?:_|$)/.test(text)) return 'yaw';
 
-    if (/axisrz|_axisrz\b|_rz(?:_|$)/.test(text)) return 'yaw';
-    if (/axisry|_axisry\b|_ry(?:_|$)/.test(text)) return 'roll';
-    if (/axisrx|_axisrx\b|_rx(?:_|$)/.test(text)) return 'pitch';
+    if (/axisrz|(?:^|_)axisrz(?:_|$)|_rz(?:_|$)/.test(text)) return 'yaw';
+    if (/axisry|(?:^|_)axisry(?:_|$)|_ry(?:_|$)/.test(text)) return 'roll';
+    if (/axisrx|(?:^|_)axisrx(?:_|$)|_rx(?:_|$)/.test(text)) return 'pitch';
 
-    if (/\bhipz\b|anklez|neck.*(?:rz|yaw)/.test(text)) return 'yaw';
-    if (/\bhipy\b|ankley|neck.*(?:ry|pitch)/.test(text)) return 'pitch';
-    if (/\bhipx\b|neck.*(?:rx|roll)/.test(text)) return 'roll';
+    if (/(?:^|_)hipz(?:_|$)|anklez|neck.*(?:rz|yaw)/.test(text)) return 'yaw';
+    if (/(?:^|_)hipy(?:_|$)|ankley|neck.*(?:ry|pitch)/.test(text)) return 'pitch';
+    if (/(?:^|_)hipx(?:_|$)|neck.*(?:rx|roll)/.test(text)) return 'roll';
 
     if (/wrist[_\s]?1|wrist1/.test(text)) return 'yaw';
     if (/wrist[_\s]?2|wrist2/.test(text)) return 'pitch';

@@ -1,9 +1,13 @@
 {
-  "name": "robot-viewer",
+  "name": "extended-robot-viewer",
   "version": "1.2.1",
   "description": "Web-based robot model viewer supporting URDF, MJCF, and USD formats",
   "main": "index.html",
   "packageManager": "pnpm@9.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GuillaumeMINGANT/Extended-robot-viewer.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -18,7 +22,7 @@
     "three.js",
     "viewer"
   ],
-  "author": "",
+  "author": "Guillaume Mingant",
   "license": "Apache-2.0",
   "dependencies": {
     "@babel/runtime": "^7.23.0",

@@ -1,15 +1,22 @@
-name: Build and Release
+name: Deploy to GitHub Pages
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,7 +38,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -43,17 +50,21 @@ jobs:
 
       - name: Build project
         run: pnpm run build
+        env:
+          GITHUB_PAGES: true
 
-      - name: Create release archive
-        run: |
-          cd dist
-          zip -r ../extended-robot-viewer-${{ github.event.release.tag_name }}.zip .
-          cd ..
-
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v1
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: extended-robot-viewer-${{ github.event.release.tag_name }}.zip
-          overwrite: true
+          path: dist
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

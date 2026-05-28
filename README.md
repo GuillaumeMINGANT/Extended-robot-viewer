@@ -2,21 +2,23 @@
 
 ---
 
-# Robot Viewer
+# Extended Robot Viewer
 
-[![Version](https://img.shields.io/badge/version-v1.2.0-blue.svg)](https://github.com/fan-ziqi/robot_viewer)
+[![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)](https://github.com/GuillaumeMINGANT/Extended-robot-viewer)
 [![License](https://img.shields.io/badge/license-Apache--2.0-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-web-orange.svg)](https://github.com/fan-ziqi/robot_viewer)
-[![JavaScript](https://img.shields.io/badge/language-JavaScript-f1e05a.svg)](https://github.com/fan-ziqi/robot_viewer)
+[![Platform](https://img.shields.io/badge/platform-web-orange.svg)](https://github.com/GuillaumeMINGANT/Extended-robot-viewer)
+[![JavaScript](https://img.shields.io/badge/language-JavaScript-f1e05a.svg)](https://github.com/GuillaumeMINGANT/Extended-robot-viewer)
 [![Three.js](https://img.shields.io/badge/Three.js-0.163.0-black.svg)](https://threejs.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.5.0-646cff.svg)](https://vitejs.dev/)
-[![Demo](https://img.shields.io/badge/Demo-Live-brightgreen.svg)](http://viewer.robotsfan.com/)
+[![Demo](https://img.shields.io/badge/Demo-Live-brightgreen.svg)](https://guillaumemingant.github.io/Extended-robot-viewer/)
 
-**Robot Viewer** is a web-based 3D viewer for robot models and scenes. Built on top of [Three.js](https://threejs.org/), it provides an intuitive interface for visualizing, editing, and simulating robots directly in the browser without any installation required. This tool helps you visualize and analyze robot structures, joints, and physical properties.
+**Extended Robot Viewer** is a web-based 3D viewer for robot models and scenes. Built on top of [Three.js](https://threejs.org/), it provides an intuitive interface for visualizing, editing, and simulating robots directly in the browser without any installation required. This tool helps you visualize and analyze robot structures, joints, and physical properties.
+
+This project is a fork of [robot_viewer](https://github.com/fan-ziqi/robot_viewer) by Ziqi Fan, with modifications and additional features by Guillaume Mingant.
 
 **Live Demo** (All processing happens in your browser - your models never leave your device):
 
-[![Try it now](https://img.shields.io/badge/🌐_Try_it_now-viewer.robotsfan.com-brightgreen?style=for-the-badge)](http://viewer.robotsfan.com/)
+[![Try it now](https://img.shields.io/badge/🌐_Try_it_now-Extended_Robot_Viewer-brightgreen?style=for-the-badge)](https://guillaumemingant.github.io/Extended-robot-viewer/)
 
 ## Key Features
 
@@ -40,8 +42,8 @@ This project uses **pnpm**, but you can also use **npm** or **yarn**.
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/fan-ziqi/robot_viewer.git
-cd robot_viewer
+git clone https://github.com/GuillaumeMINGANT/Extended-robot-viewer.git
+cd Extended-robot-viewer
 pnpm install
 ```
 
@@ -63,18 +65,23 @@ Output will be in the `dist/` directory.
 
 We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
-- **Bug Reports**: Open an [issue](https://github.com/fan-ziqi/robot_viewer/issues) with details
-- **Feature Requests**: Discuss ideas in [Discussions](https://github.com/fan-ziqi/robot_viewer/discussions)
+- **Bug Reports**: Open an [issue](https://github.com/GuillaumeMINGANT/Extended-robot-viewer/issues) with details
+- **Feature Requests**: Discuss ideas in [Discussions](https://github.com/GuillaumeMINGANT/Extended-robot-viewer/discussions)
 - **Pull Requests**: Submit PRs with clear descriptions and tests
 
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
+Original work Copyright 2025 Ziqi Fan. Modifications and additions Copyright 2025-2026 Guillaume Mingant.
+
 ## Acknowledgements
 
-Robot Viewer builds upon the excellent work of the open-source robotics community. This project integrates several powerful open-source projects:
+Extended Robot Viewer builds upon the excellent work of the open-source robotics community. This project integrates several powerful open-source projects:
 
+- **[robot_viewer](https://github.com/fan-ziqi/robot_viewer)** - The original project this fork is based on, by Ziqi Fan
+- **[robot-explorer](https://github.com/ferrolho/robot-explorer)** - Interactive 3D robot viewer with IK, manipulability ellipsoids, and force polytopes
+- **[PlaCo](https://github.com/Rhoban/placo)** - QP-based robot planning and control framework by Rhoban
 - **[urdf-loader](https://github.com/gkjohnson/urdf-loaders)** - Robust URDF loading for Three.js
 - **[xacro-parser](https://github.com/gkjohnson/xacro-parser)** - ROS Xacro file format parser for Javascript
 - **[mujoco_wasm](https://github.com/zalo/mujoco_wasm)** - MuJoCo physics engine compiled to WebAssembly

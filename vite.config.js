@@ -16,8 +16,7 @@ function versionPlugin() {
 }
 
 export default defineConfig({
-  // Use relative paths, support file:// protocol and arbitrary deployment paths
-  base: './',
+  base: process.env.GITHUB_PAGES ? '/Extended-robot-viewer/' : './',
   // Define global constants
   define: {
     '__APP_VERSION__': JSON.stringify(version)
@@ -55,7 +54,7 @@ export default defineConfig({
     },
     // Use environment variable configuration, use default values if not set
     allowedHosts: process.env.VITE_ALLOWED_HOSTS?.split(',') || [
-      'viewer.robotsfan.com',
+      'guillaumemingant.github.io',
       'localhost',
       '127.0.0.1'
     ]

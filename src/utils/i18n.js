@@ -63,7 +63,7 @@ export const translations = {
         // 帮助对话框
         'helpTitle': `Robot Viewer v${APP_VERSION}`,
         'about': '关于',
-        'aboutContent': 'Robot Viewer 是一个基于 Three.js 的网页端机器人模型 3D 查看器，提供直观的可视化界面，帮助您在浏览器中查看和分析机器人的结构、关节和物理属性，无需安装任何软件。<br><br>格式支持：URDF、Xacro、MJCF、USD（部分支持）<br>机器人类型：串联机器人结构（暂不支持并联机器人）<br><br>由 <strong>范子琦</strong> 开发。',
+        'aboutContent': 'Extended Robot Viewer 是一个基于 Three.js 的网页端机器人模型 3D 查看器，提供直观的可视化界面，帮助您在浏览器中查看和分析机器人的结构、关节和物理属性，无需安装任何软件。<br><br>格式支持：URDF、Xacro、MJCF、USD（部分支持）<br>机器人类型：串联机器人结构（暂不支持并联机器人）<br><br>基于 <strong>范子琦</strong> 的 robot_viewer 项目，由 <strong>Guillaume Mingant</strong> 扩展开发。',
         'projectHome': '项目主页',
         'email': '邮箱',
         'myGithub': '我的GitHub',
@@ -192,7 +192,7 @@ export const translations = {
         'measureRefresh': '更新',
 
         'graphHint': '拖动: 移动 | 滚轮: 缩放 | 右键: 隐藏/显示 | Ctrl+左键: 测量',
-        'copyright': '© 2025 范子琦 版权所有。',
+        'copyright': '© 2025-2026 Guillaume Mingant。基于 fan-ziqi 的 robot_viewer。',
 
         // 模型信息
         'type': '类型',
@@ -309,7 +309,7 @@ export const translations = {
         // Help dialog
         'helpTitle': `Robot Viewer v${APP_VERSION}`,
         'about': 'About',
-        'aboutContent': 'Robot Viewer is a web-based 3D viewer for robot models and scenes. Built on top of Three.js, it provides an intuitive interface for visualizing, editing, and simulating robots directly in the browser without any installation required. This tool helps you visualize and analyze robot structures, joints, and physical properties.<br><br>Format Support: URDF, Xacro, MJCF, USD (partial support)<br>Robot Types: Serial robot structures (parallel robots not currently supported)<br><br>Developed by <strong>Ziqi Fan</strong>.',
+        'aboutContent': 'Extended Robot Viewer is a web-based 3D viewer for robot models and scenes. Built on top of Three.js, it provides an intuitive interface for visualizing, editing, and simulating robots directly in the browser without any installation required. This tool helps you visualize and analyze robot structures, joints, and physical properties.<br><br>Format Support: URDF, Xacro, MJCF, USD (partial support)<br>Robot Types: Serial robot structures (parallel robots not currently supported)<br><br>Originally developed by <strong>Ziqi Fan</strong>. Extended by <strong>Guillaume Mingant</strong>.',
         'projectHome': 'Project Home',
         'email': 'Email',
         'myGithub': 'My GitHub',
@@ -438,7 +438,7 @@ export const translations = {
         'measureRefresh': 'Update',
 
         'graphHint': 'Drag: Move | Scroll: Zoom | Right-click: Hide/Show | Ctrl+Click: Measure',
-        'copyright': '© 2025 Ziqi Fan. All rights reserved.',
+        'copyright': '© 2025-2026 Guillaume Mingant. Based on robot_viewer by Ziqi Fan.',
 
         // Model info
         'type': 'Type',

@@ -2,23 +2,25 @@
 
 ---
 
-# Extended Robot Viewer
+# Ermine Robot Viewer
 
-[![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)](https://github.com/GuillaumeMINGANT/Extended-robot-viewer)
+Ermine (**E**nvironment for **R**obot **M**odel **IN**spection and **E**diting)
+
+[![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)](https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer)
 [![License](https://img.shields.io/badge/license-Apache--2.0-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-web-orange.svg)](https://github.com/GuillaumeMINGANT/Extended-robot-viewer)
-[![JavaScript](https://img.shields.io/badge/language-JavaScript-f1e05a.svg)](https://github.com/GuillaumeMINGANT/Extended-robot-viewer)
+[![Platform](https://img.shields.io/badge/platform-web-orange.svg)](https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer)
+[![JavaScript](https://img.shields.io/badge/language-JavaScript-f1e05a.svg)](https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer)
 [![Three.js](https://img.shields.io/badge/Three.js-0.163.0-black.svg)](https://threejs.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.5.0-646cff.svg)](https://vitejs.dev/)
-[![Demo](https://img.shields.io/badge/Demo-Live-brightgreen.svg)](https://guillaumemingant.github.io/Extended-robot-viewer/)
+[![Demo](https://img.shields.io/badge/Demo-Live-brightgreen.svg)](https://guillaumemingant.github.io/ERMINE-Robot_Viewer/)
 
-**Extended Robot Viewer** is a web-based 3D viewer for robot models and scenes. Built on top of [Three.js](https://threejs.org/), it provides an intuitive interface for visualizing, editing, measuring, inverse kinematics and simulating robots directly in the browser without any installation required. Load robots from file or browse a catalog of 80+ URDF models from 35+ brands.
+**Ermine Robot Viewer** is a browser-based workbench for inspecting, editing, debugging, exploring, and controlling robot description models across formats such as URDF, Xacro, MJCF, and USD. Built on top of [Three.js](https://threejs.org/), it runs entirely in the browser — no installation required. Load robots from file or browse a catalog of 80+ URDF models from 35+ brands.
 
 This project is a fork of [robot_viewer](https://github.com/fan-ziqi/robot_viewer) by Ziqi Fan, with modifications and additional features by Guillaume Mingant.
 
 **Live Demo** (All processing happens in your browser - your models never leave your device):
 
-[![Try it now](https://img.shields.io/badge/🌐_Try_it_now-Extended_Robot_Viewer-brightgreen?style=for-the-badge)](https://guillaumemingant.github.io/Extended-robot-viewer/)
+[![Try it now](https://img.shields.io/badge/🌐_Try_it_now-ERMINE-brightgreen?style=for-the-badge)](https://guillaumemingant.github.io/ERMINE-Robot_Viewer/)
 
 ## Key Features
 
@@ -89,24 +91,24 @@ English and Chinese (Simplified) with a settings-panel language picker.
 
 ## Getting Started
 
+**Prerequisites:** [Node.js](https://nodejs.org/) 20+ and [pnpm](https://pnpm.io/installation) 9+ on your `PATH`. After changing PATH or installing Node, restart your terminal (or Cursor).
+
 This project uses **pnpm**, but you can also use **npm** or **yarn**.
 
-Clone the repository and install dependencies:
+Clone the repository, install dependencies, and start the local dev server:
 
 ```bash
-git clone https://github.com/GuillaumeMINGANT/Extended-robot-viewer.git
-cd Extended-robot-viewer
+git clone https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer.git
+cd ERMINE-Robot_Viewer
 pnpm install
-pnpm run dev        # Vite dev server with HMR
-pnpm run build      # Production build → dist/
-pnpm run preview    # Preview production build
 ```
 
 Start the development server:
-
 ```bash
 pnpm run dev
 ```
+
+The app is then available at **http://localhost:3000** (Vite opens the browser automatically).
 
 Build for production:
 
@@ -116,15 +118,16 @@ pnpm run build
 
 Output will be in the `dist/` directory.
 
+
 ## GitHub Pages (live demo)
 
-The live site must serve the **Vite build** in `dist/`, not the raw repo. If the page loads but nothing is clickable, open **View page source** — a broken deploy still has `src="/src/main.js"`; a correct deploy has `src="/Extended-robot-viewer/assets/js/..."`.
+The live site must serve the **Vite build** in `dist/`, not the raw repo. If the page loads but nothing is clickable, open **View page source** — a broken deploy still has `src="/src/main.js"`; a correct deploy has `src="/ERMINE-Robot_Viewer/assets/js/..."`.
 
 ### One-time setup (pick **one** option)
 
 **Option A — GitHub Actions (recommended)**
 
-1. [Settings → Pages](https://github.com/GuillaumeMINGANT/Extended-robot-viewer/settings/pages) → **Build and deployment → Source** → **GitHub Actions**
+1. [Settings → Pages](https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer/settings/pages) → **Build and deployment → Source** → **GitHub Actions**
 2. Merge to `main` or run **Actions → Deploy to GitHub Pages → Run workflow**
 
 **Option B — `gh-pages` branch**
@@ -136,14 +139,14 @@ Do **not** use **main** / **(root)** — that publishes unbuilt source and break
 
 ### After deploy
 
-Hard-refresh https://guillaumemingant.github.io/Extended-robot-viewer/ (Ctrl+F5).
+Hard-refresh https://guillaumemingant.github.io/ERMINE-Robot_Viewer/ (Ctrl+F5).
 
 ## Contributing
 
 We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
-- **Bug Reports**: Open an [issue](https://github.com/GuillaumeMINGANT/Extended-robot-viewer/issues) with details
-- **Feature Requests**: Discuss ideas in [Discussions](https://github.com/GuillaumeMINGANT/Extended-robot-viewer/discussions)
+- **Bug Reports**: Open an [issue](https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer/issues) with details
+- **Feature Requests**: Discuss ideas in [Discussions](https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer/discussions)
 - **Pull Requests**: Submit PRs with clear descriptions and tests
 
 ## License
@@ -154,7 +157,7 @@ Original work Copyright 2025 Ziqi Fan. Modifications and additions Copyright 202
 
 ## Acknowledgements
 
-Extended Robot Viewer builds upon the excellent work of the open-source robotics community:
+Ermine Robot Viewer builds upon the excellent work of the open-source robotics community:
 
 - **[robot_viewer](https://github.com/fan-ziqi/robot_viewer)** — The original project this fork is based on, by Ziqi Fan
 - **[robot-explorer](https://github.com/ferrolho/robot-explorer)** — Interactive 3D robot viewer with IK, manipulability ellipsoids, and force polytopes; robot catalog model source

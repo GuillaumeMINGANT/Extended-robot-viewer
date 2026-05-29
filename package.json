@@ -1,12 +1,12 @@
 {
-  "name": "extended-robot-viewer",
+  "name": "ermine-robot-viewer",
   "version": "1.2.1",
-  "description": "Web-based robot model viewer supporting URDF, MJCF, and USD formats",
+  "description": "ERMINE — Environment for Robot Model INspection and Editing (URDF, MJCF, USD)",
   "main": "index.html",
   "packageManager": "pnpm@9.0.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GuillaumeMINGANT/Extended-robot-viewer.git"
+    "url": "https://github.com/GuillaumeMINGANT/ERMINE-Robot_Viewer.git"
   },
   "scripts": {
     "dev": "vite",

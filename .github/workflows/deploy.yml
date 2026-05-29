@@ -49,7 +49,7 @@ jobs:
             echo "::error::dist/index.html still references /src/main.js — build did not run correctly"
             exit 1
           fi
-          if ! grep -q '/Extended-robot-viewer/' dist/index.html; then
+          if ! grep -q '/ERMINE-Robot_Viewer/' dist/index.html; then
             echo "::error::dist/index.html missing GitHub Pages base path"
             exit 1
           fi

@@ -46,13 +46,13 @@ jobs:
       - name: Create release archive
         run: |
           cd dist
-          zip -r ../extended-robot-viewer-${{ github.event.release.tag_name }}.zip .
+          zip -r ../ermine-${{ github.event.release.tag_name }}.zip .
           cd ..
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: extended-robot-viewer-${{ github.event.release.tag_name }}.zip
+          files: ermine-${{ github.event.release.tag_name }}.zip
           overwrite: true
 

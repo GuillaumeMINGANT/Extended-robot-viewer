@@ -61,9 +61,9 @@ export const translations = {
         'noFileOpen': '未打开文件',
 
         // 帮助对话框
-        'helpTitle': `Robot Viewer v${APP_VERSION}`,
+        'helpTitle': `ERMINE v${APP_VERSION}`,
         'about': '关于',
-        'aboutContent': 'Extended Robot Viewer 是一个基于 Three.js 的网页端机器人模型 3D 查看器，提供直观的可视化界面，帮助您在浏览器中查看和分析机器人的结构、关节和物理属性，无需安装任何软件。<br><br>格式支持：URDF、Xacro、MJCF、USD（部分支持）<br>机器人类型：串联机器人结构（暂不支持并联机器人）<br><br>基于 <strong>范子琦</strong> 的 robot_viewer 项目，由 <strong>Guillaume Mingant</strong> 扩展开发。',
+        'aboutContent': 'ERMINE（Environment for Robot Model INspection and Editing）是一个基于 Three.js 的网页端机器人模型 3D 查看与编辑环境，提供直观的可视化界面，帮助您在浏览器中查看、分析和编辑机器人的结构、关节和物理属性，无需安装任何软件。<br><br>格式支持：URDF、Xacro、MJCF、USD（部分支持）<br>机器人类型：串联机器人结构（暂不支持并联机器人）<br><br>基于 <strong>范子琦</strong> 的 robot_viewer 项目，由 <strong>Guillaume Mingant</strong> 扩展开发。',
         'projectHome': '项目主页',
         'email': '邮箱',
         'myGithub': '我的GitHub',
@@ -308,9 +308,9 @@ export const translations = {
         'noFileOpen': 'No File Open',
 
         // Help dialog
-        'helpTitle': `Robot Viewer v${APP_VERSION}`,
+        'helpTitle': `ERMINE v${APP_VERSION}`,
         'about': 'About',
-        'aboutContent': 'Extended Robot Viewer is a web-based 3D viewer for robot models and scenes. Built on top of Three.js, it provides an intuitive interface for visualizing, editing, and simulating robots directly in the browser without any installation required. This tool helps you visualize and analyze robot structures, joints, and physical properties.<br><br>Format Support: URDF, Xacro, MJCF, USD (partial support)<br>Robot Types: Serial robot structures (parallel robots not currently supported)<br><br>Originally developed by <strong>Ziqi Fan</strong>. Extended by <strong>Guillaume Mingant</strong>.',
+        'aboutContent': 'ERMINE (Environment for Robot Model INspection and Editing) is a web-based 3D environment for viewing and editing robot models and scenes. Built on top of Three.js, it provides an intuitive interface for visualizing, editing, and simulating robots directly in the browser without any installation required. This tool helps you visualize and analyze robot structures, joints, and physical properties.<br><br>Format Support: URDF, Xacro, MJCF, USD (partial support)<br>Robot Types: Serial robot structures (parallel robots not currently supported)<br><br>Originally developed by <strong>Ziqi Fan</strong>. Extended by <strong>Guillaume Mingant</strong>.',
         'projectHome': 'Project Home',
         'email': 'Email',
         'myGithub': 'My GitHub',

@@ -10,13 +10,13 @@ function versionPlugin() {
   return {
     name: 'version-plugin',
     transformIndexHtml(html) {
-      return html.replace(/Robot Viewer v\d+\.\d+\.\d+/g, `Robot Viewer v${version}`);
+      return html.replace(/ERMINE v\d+\.\d+\.\d+/g, `ERMINE v${version}`);
     }
   };
 }
 
 export default defineConfig({
-  base: process.env.GITHUB_PAGES ? '/Extended-robot-viewer/' : './',
+  base: process.env.GITHUB_PAGES ? '/ERMINE-Robot_Viewer/' : './',
   // Define global constants
   define: {
     '__APP_VERSION__': JSON.stringify(version)
@@ -42,6 +42,7 @@ export default defineConfig({
     }
   ],
   server: {
+    host: true,
     port: 3000,
     open: true,
     hmr: {
